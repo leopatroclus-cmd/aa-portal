@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AA Portal
 
-## Getting Started
+Aero Africa Operations Portal — internal dashboard with two sections:
 
-First, run the development server:
+- **Agent Network** — global agent directory (Global + Africa tabs, filterable by country/city/primary)
+- **BU Report** — monthly financial dashboard for all Aero Africa business units (FYE 2026)
+
+## Setup
 
 ```bash
+npm install
+cp .env.local.example .env.local
+# Add your Google API key to .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_API_KEY` | Google Sheets API key (read-only access to the AA sheets) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Data Sources
 
-## Learn More
+- **Agent Network**: Google Sheet `10wxWr6jsmn7n7gSPfQpbJvH8OXEPR9AZv7IgxnIdbPk`
+- **BU Report**: Google Sheet `1rL0tyudLrOlRZN03oj8BLoMdsRpCxePb6DxTJ4w3_oc`
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy to Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push to GitHub
+2. Import in Vercel
+3. Add `GOOGLE_API_KEY` environment variable
+4. Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Both pages are server-rendered on demand — data is always fresh.
