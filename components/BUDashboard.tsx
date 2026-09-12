@@ -60,7 +60,7 @@ export default function BUDashboard({ buSheets }: Props) {
             className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             style={{
               background: selected === i ? "var(--accent)" : "var(--surface2)",
-              color: selected === i ? "#fff" : "var(--muted)",
+              color: selected === i ? "#fff" : "var(--text)",
               border: "1px solid",
               borderColor: selected === i ? "var(--accent)" : "var(--border)",
             }}
@@ -87,7 +87,7 @@ export default function BUDashboard({ buSheets }: Props) {
           </h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis
                 tick={{ fill: "var(--muted)", fontSize: 11 }}
@@ -96,11 +96,11 @@ export default function BUDashboard({ buSheets }: Props) {
                 tickFormatter={(v) => fmt(v, "$")}
               />
               <Tooltip
-                contentStyle={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8 }}
-                labelStyle={{ color: "var(--text)" }}
+                contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                labelStyle={{ color: "var(--text)", fontWeight: 600 }}
                 formatter={(v) => [fmtUSD(Number(v)), "Profit"]}
               />
-              <Bar dataKey="profit" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="profit" fill="var(--accent)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -112,7 +112,7 @@ export default function BUDashboard({ buSheets }: Props) {
           </h3>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis
                 tick={{ fill: "var(--muted)", fontSize: 11 }}
@@ -121,17 +121,17 @@ export default function BUDashboard({ buSheets }: Props) {
                 tickFormatter={(v) => fmt(v)}
               />
               <Tooltip
-                contentStyle={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8 }}
-                labelStyle={{ color: "var(--text)" }}
+                contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                labelStyle={{ color: "var(--text)", fontWeight: 600 }}
                 formatter={(v) => [Number(v).toLocaleString(), "Shipments"]}
               />
               <Line
                 type="monotone"
                 dataKey="shipments"
                 stroke="var(--accent)"
-                strokeWidth={2}
-                dot={{ fill: "var(--accent)", r: 3 }}
-                activeDot={{ r: 5 }}
+                strokeWidth={2.5}
+                dot={{ fill: "var(--accent)", r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 0 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -171,7 +171,7 @@ export default function BUDashboard({ buSheets }: Props) {
                   <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
                     {d.weight[i] ? Math.round(d.weight[i]).toLocaleString() : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-medium" style={{ color: d.totalProfit[i] > 0 ? "#4ade80" : d.totalProfit[i] < 0 ? "#f87171" : "var(--muted)" }}>
+                  <td className="px-4 py-2.5 text-right font-medium" style={{ color: d.totalProfit[i] > 0 ? "var(--accent)" : d.totalProfit[i] < 0 ? "#dc2626" : "var(--muted)" }}>
                     {d.totalProfit[i] ? fmtUSD(d.totalProfit[i]) : "—"}
                   </td>
                 </tr>
@@ -184,7 +184,7 @@ export default function BUDashboard({ buSheets }: Props) {
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
                   {Math.round(d.totals.weight).toLocaleString()}
                 </td>
-                <td className="px-4 py-3 text-right font-semibold" style={{ color: "#4ade80" }}>
+                <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--accent)" }}>
                   {fmtUSD(d.totals.totalProfit)}
                 </td>
               </tr>

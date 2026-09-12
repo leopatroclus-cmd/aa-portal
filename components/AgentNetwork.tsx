@@ -61,15 +61,17 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-5 p-1 rounded-lg w-fit" style={{ background: "var(--surface2)" }}>
+      <div className="flex gap-2 mb-5">
         {(["Global", "Africa"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => handleTabChange(t)}
-            className="px-5 py-2 rounded-md text-sm font-medium transition-colors"
+            className="px-5 py-2 rounded-full text-sm font-medium transition-colors"
             style={{
-              background: tab === t ? "var(--accent)" : "transparent",
+              background: tab === t ? "var(--accent)" : "var(--surface2)",
               color: tab === t ? "#fff" : "var(--muted)",
+              border: "1px solid",
+              borderColor: tab === t ? "var(--accent)" : "var(--border)",
             }}
           >
             {t}
@@ -148,7 +150,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                   {agent.network && (
                     <span
                       className="px-2 py-0.5 rounded text-xs font-medium"
-                      style={{ background: "rgba(79,110,247,0.15)", color: "var(--accent)" }}
+                      style={{ background: "#fff7ed", color: "var(--accent)", border: "1px solid #fed7aa" }}
                     >
                       {agent.network}
                     </span>
@@ -158,7 +160,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                   {agent.isPrimary && (
                     <span
                       className="px-2 py-0.5 rounded text-xs font-medium"
-                      style={{ background: "rgba(34,197,94,0.15)", color: "#4ade80" }}
+                      style={{ background: "#111", color: "#fff" }}
                     >
                       Primary
                     </span>

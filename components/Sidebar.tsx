@@ -31,8 +31,9 @@ export default function Sidebar() {
               href={item.href}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
               style={{
-                background: active ? "var(--accent)" : "transparent",
-                color: active ? "#fff" : "var(--muted)",
+                background: active ? "#fff7ed" : "transparent",
+                color: active ? "var(--accent)" : "var(--muted)",
+                borderLeft: active ? "3px solid var(--accent)" : "3px solid transparent",
               }}
             >
               <span>{item.icon}</span>
