@@ -1,14 +1,14 @@
-import { BU_SHEETS, fetchBUData } from "@/lib/sheets";
+import { BU_SHEETS, fetchBURecords } from "@/lib/sheets";
 import BUDashboard from "@/components/BUDashboard";
 
 export const dynamic = "force-dynamic";
 
 export default async function BUReportPage() {
-  // Fetch all BU data in parallel
   const allData = await Promise.all(
     BU_SHEETS.map(async (bu) => ({
-      ...bu,
-      data: await fetchBUData(bu.name),
+      name: bu.name,
+      label: bu.label,
+      records: await fetchBURecords(bu),
     }))
   );
 

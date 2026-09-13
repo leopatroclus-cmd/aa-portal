@@ -11,6 +11,8 @@ async function fetchRange(sheetId: string, range: string): Promise<string[][]> {
   return data.values || [];
 }
 
+// ─── Agents ──────────────────────────────────────────────────────────────────
+
 export interface Agent {
   country: string;
   city: string;
@@ -38,160 +40,129 @@ export async function fetchAgents(tab: "Global" | "Africa"): Promise<Agent[]> {
     }));
 }
 
+// ─── BU Sheets ───────────────────────────────────────────────────────────────
+
+export type BUType = "standard" | "international" | "east-africa" | "consolidated";
+
 export interface BUSheet {
-  name: string;
+  name: string;       // original tab name (for legacy reads if needed)
+  newTab: string;     // _new tab name
   label: string;
+  type: BUType;
 }
 
 export const BU_SHEETS: BUSheet[] = [
-  { name: "CONSOLIDATED OPS", label: "Consolidated" },
-  { name: "AASA", label: "South Africa" },
-  { name: "AAINT ", label: "International" },
-  { name: "AAEA", label: "East Africa" },
-  { name: "AAWN", label: "West Nigeria" },
-  { name: "AACN ", label: "China" },
-  { name: "AAMA ", label: "Morocco" },
+  { name: "CONSOLIDATED OPS", newTab: "CONSOLIDATED OPS_new", label: "Consolidated",   type: "consolidated"  },
+  { name: "AASA",             newTab: "AASA_new",             label: "South Africa",   type: "standard"      },
+  { name: "AAINT ",           newTab: "AAINT_new",            label: "International",  type: "international" },
+  { name: "AAEA",             newTab: "AAEA_new",             label: "East Africa",    type: "east-africa"   },
+  { name: "AAWN",             newTab: "AAWN_new",             label: "West Nigeria",   type: "standard"      },
+  { name: "AACN ",            newTab: "AACN_new",             label: "China",          type: "standard"      },
+  { name: "AAMA ",            newTab: "AAMA_new",             label: "Morocco",        type: "standard"      },
 ];
 
-const MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+// ─── BU Records (flat, multi-year) ───────────────────────────────────────────
+
+export interface BURecord {
+  month: string;          // e.g. "April", "Aug"
+  year: number;
+  sortKey: number;        // year * 100 + calendarMonth for chronological sort
+  airfreightShipments: number;
+  airfreightWeight: number;
+  airfreightProfit: number;
+  solutionShipments: number;
+  solutionWeight: number;
+  solutionProfit: number;
+  oceanShipments: number;
+  oceanWeight: number;
+  oceanProfit: number;
+  gulfShipments: number;
+  gulfWeight: number;
+  gulfProfit: number;
+  staff: number;
+  totalProfit: number;
+}
+
+// Month → calendar number (for sort key)
+const MONTH_TO_CAL: Record<string, number> = {
+  January: 1, Jan: 1,
+  February: 2, Feb: 2,
+  March: 3, Mar: 3,
+  April: 4, Apr: 4,
+  May: 5,
+  June: 6, Jun: 6,
+  July: 7, Jul: 7,
+  August: 8, Aug: 8,
+  September: 9, Sep: 9,
+  October: 10, Oct: 10,
+  November: 11, Nov: 11,
+  December: 12, Dec: 12,
+};
 
 function parseNum(val: string | undefined): number {
   if (!val) return 0;
   const cleaned = val.replace(/[$,\s]/g, "").replace(/R\s*/g, "").trim();
+  if (cleaned === "-" || cleaned === "") return 0;
   const n = parseFloat(cleaned);
   return isNaN(n) ? 0 : n;
 }
 
-export interface BUData {
-  months: string[];
-  shipments: number[];
-  solutionShipments: number[];
-  solutionWeight: number[];
-  solutionProfit: number[];
-  oceanShipments: number[];
-  oceanWeight: number[];
-  oceanProfit: number[];
-  gulfShipments: number[];
-  gulfWeight: number[];
-  gulfProfit: number[];
-  weight: number[];
-  profit: number[];
-  totalProfit: number[];
-  staff: number;
-  totals: {
-    shipments: number;
-    weight: number;
-    profit: number;
-    totalProfit: number;
-    // Solution
-    solutionShipments: number;
-    solutionWeight: number;
-    solutionProfit: number;
-    // Ocean freight (INT only, 0 for others)
-    oceanShipments: number;
-    oceanWeight: number;
-    oceanProfit: number;
-    // Gulf Air (EA / Consolidated only, 0 for others)
-    gulfShipments: number;
-    gulfWeight: number;
-    gulfProfit: number;
-    // Derived
-    profitPerShipment: number;
+function toRecord(row: string[], type: BUType): BURecord {
+  const month = row[0]?.trim() || "";
+  const year = parseInt(row[1]) || 0;
+  const calMonth = MONTH_TO_CAL[month] ?? 0;
+  const n = (i: number) => parseNum(row[i]);
+
+  let airfreightShipments = 0, airfreightWeight = 0, airfreightProfit = 0;
+  let solutionShipments = 0, solutionWeight = 0, solutionProfit = 0;
+  let oceanShipments = 0, oceanWeight = 0, oceanProfit = 0;
+  let gulfShipments = 0, gulfWeight = 0, gulfProfit = 0;
+  let staff = 0;
+
+  if (type === "standard") {
+    // C D E F G H I
+    airfreightShipments = n(2); airfreightWeight = n(3); airfreightProfit = n(4);
+    solutionShipments = n(5);  solutionWeight = n(6);  solutionProfit = n(7);
+    staff = n(8);
+  } else if (type === "international") {
+    // C=export, D=expW, E=expP, F=import, G=impW, H=impP, I=ocean, J=ocW, K=ocP, L=staff
+    airfreightShipments = n(2) + n(5); // export + import
+    airfreightWeight    = n(3) + n(6);
+    airfreightProfit    = n(4) + n(7);
+    oceanShipments = n(8); oceanWeight = n(9); oceanProfit = n(10);
+    staff = n(11);
+  } else if (type === "east-africa") {
+    // C D E F G H I J K L
+    airfreightShipments = n(2); airfreightWeight = n(3); airfreightProfit = n(4);
+    solutionShipments = n(5);  solutionWeight = n(6);  solutionProfit = n(7);
+    gulfShipments = n(8); gulfWeight = n(9); gulfProfit = n(10);
+    staff = n(11);
+  } else if (type === "consolidated") {
+    // C D E F G H I J K L M N O
+    airfreightShipments = n(2); airfreightWeight = n(3); airfreightProfit = n(4);
+    solutionShipments = n(5);  solutionWeight = n(6);  solutionProfit = n(7);
+    oceanShipments = n(8); oceanWeight = n(9);  oceanProfit = n(10);
+    gulfShipments = n(11); gulfWeight = n(12); gulfProfit = n(13);
+    staff = n(14);
+  }
+
+  const totalProfit = airfreightProfit + solutionProfit + oceanProfit + gulfProfit;
+
+  return {
+    month, year,
+    sortKey: year * 100 + calMonth,
+    airfreightShipments, airfreightWeight, airfreightProfit,
+    solutionShipments, solutionWeight, solutionProfit,
+    oceanShipments, oceanWeight, oceanProfit,
+    gulfShipments, gulfWeight, gulfProfit,
+    staff, totalProfit,
   };
 }
 
-export async function fetchBUData(sheetName: string): Promise<BUData> {
-  const rows = await fetchRange(BU_SHEET_ID, `'${sheetName}'!A1:O60`);
-
-  // Returns [row, rowIndex] or [undefined, -1]
-  function findRowWithIdx(label: string, startAfter = 0): [string[] | undefined, number] {
-    for (let i = startAfter; i < rows.length; i++) {
-      if (rows[i]?.[0]?.toLowerCase().includes(label.toLowerCase())) {
-        return [rows[i], i];
-      }
-    }
-    return [undefined, -1];
-  }
-
-  const extract = (row: string[] | undefined) =>
-    MONTHS.map((_, i) => parseNum(row?.[i + 1]));
-
-  const getTotalCol = (row: string[] | undefined) => {
-    if (!row) return 0;
-    for (let i = row.length - 1; i >= 1; i--) {
-      const v = parseNum(row[i]);
-      if (v !== 0) return v;
-    }
-    return 0;
-  };
-
-  // ── Airfreight ──────────────────────────────────────────────────
-  const [shipmentsRow] = findRowWithIdx("Total # of airfreight");
-  const [weightRow, weightIdx] = findRowWithIdx("Total chargeable weight");
-  const [profitRow, profitIdx] = findRowWithIdx("Total file profit (USD)");
-
-  // ── Solution ────────────────────────────────────────────────────
-  const [solutionShipmentsRow] = findRowWithIdx("Total # of solution");
-  const [solutionWeightRow] = findRowWithIdx("Total chargeable weight", weightIdx + 1);
-  const [solutionProfitRow, solutionProfitIdx] = findRowWithIdx("Total file profit (USD)", profitIdx + 1);
-
-  // ── Ocean / Gulf Air (3rd profit occurrence) ────────────────────
-  const [thirdProfitRow] = findRowWithIdx("Total file profit (USD)", solutionProfitIdx + 1);
-
-  // Ocean freight shipments (AAINT)
-  const [oceanShipmentsRow] = findRowWithIdx("Total # of ocean freight");
-  // Gulf Air shipments (AAEA / Consolidated)
-  const [gulfShipmentsRow] = findRowWithIdx("Gulf Air");
-
-  // 3rd chargeable weight = ocean weight (INT) or gulf weight (EA)
-  const [thirdWeightRow] = findRowWithIdx("Total chargeable weight", (solutionWeightRow ? rows.indexOf(solutionWeightRow) : weightIdx) + 1);
-
-  // ── Staff ───────────────────────────────────────────────────────
-  const [staffRow] = findRowWithIdx("Number of staff");
-
-  // ── Total file profit (the non-USD summary row) ─────────────────
-  const totalFileProfitRow = rows.find((r) => r[0]?.trim() === "Total file profit") ?? profitRow;
-
-  const staffVal = staffRow ? parseNum(staffRow[staffRow.length - 1]) || parseNum(staffRow[1]) : 0;
-
-  const airfreightShipmentsTotal = getTotalCol(shipmentsRow);
-  const totalProfitVal = getTotalCol(totalFileProfitRow);
-
-  return {
-    months: MONTHS,
-    shipments: extract(shipmentsRow),
-    solutionShipments: extract(solutionShipmentsRow),
-    solutionWeight: extract(solutionWeightRow),
-    solutionProfit: extract(solutionProfitRow),
-    oceanShipments: extract(oceanShipmentsRow),
-    oceanWeight: oceanShipmentsRow ? extract(thirdWeightRow) : MONTHS.map(() => 0),
-    oceanProfit: oceanShipmentsRow ? extract(thirdProfitRow) : MONTHS.map(() => 0),
-    gulfShipments: extract(gulfShipmentsRow),
-    gulfWeight: gulfShipmentsRow && !oceanShipmentsRow ? extract(thirdWeightRow) : MONTHS.map(() => 0),
-    gulfProfit: gulfShipmentsRow && !oceanShipmentsRow ? extract(thirdProfitRow) : MONTHS.map(() => 0),
-    weight: extract(weightRow),
-    profit: extract(profitRow),
-    totalProfit: extract(totalFileProfitRow),
-    staff: staffVal,
-    totals: {
-      shipments: airfreightShipmentsTotal,
-      weight: getTotalCol(weightRow),
-      profit: getTotalCol(profitRow),
-      totalProfit: totalProfitVal,
-      // Solution
-      solutionShipments: getTotalCol(solutionShipmentsRow),
-      solutionWeight: getTotalCol(solutionWeightRow),
-      solutionProfit: getTotalCol(solutionProfitRow),
-      // Ocean (INT) — only present if ocean row found
-      oceanShipments: getTotalCol(oceanShipmentsRow),
-      oceanWeight: oceanShipmentsRow ? getTotalCol(thirdWeightRow) : 0,
-      oceanProfit: oceanShipmentsRow ? getTotalCol(thirdProfitRow) : 0,
-      // Gulf Air (EA) — only present if gulf row found
-      gulfShipments: gulfShipmentsRow ? getTotalCol(gulfShipmentsRow) : 0,
-      gulfWeight: gulfShipmentsRow && !oceanShipmentsRow ? getTotalCol(thirdWeightRow) : 0,
-      gulfProfit: gulfShipmentsRow && !oceanShipmentsRow ? getTotalCol(thirdProfitRow) : 0,
-      // Derived
-      profitPerShipment: airfreightShipmentsTotal > 0 ? totalProfitVal / airfreightShipmentsTotal : 0,
-    },
-  };
+export async function fetchBURecords(bu: BUSheet): Promise<BURecord[]> {
+  const rows = await fetchRange(BU_SHEET_ID, `'${bu.newTab}'!A2:P500`);
+  return rows
+    .filter((r) => r[0]?.trim() && r[1]?.trim()) // skip blank rows / header
+    .map((r) => toRecord(r, bu.type))
+    .sort((a, b) => a.sortKey - b.sortKey);
 }

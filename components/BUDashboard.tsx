@@ -1,54 +1,69 @@
 "use client";
-import { useState } from "react";
-import type { BUData } from "@/lib/sheets";
+import { useState, useMemo } from "react";
+import type { BURecord } from "@/lib/sheets";
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 interface BUEntry {
   name: string;
   label: string;
-  data: BUData;
+  records: BURecord[];
 }
 
 interface Props {
   buSheets: BUEntry[];
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function fmt(n: number, prefix = "") {
   if (n >= 1_000_000) return `${prefix}${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${prefix}${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1_000)     return `${prefix}${(n / 1_000).toFixed(1)}K`;
   return `${prefix}${n.toFixed(0)}`;
 }
 
 function fmtUSD(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency", currency: "USD", maximumFractionDigits: 0,
+  }).format(n);
 }
 
-// Map BU name → _new tab name and field schema
-interface FieldDef {
-  label: string;
-  group?: string; // section header
+const sum = (records: BURecord[], key: keyof BURecord) =>
+  records.reduce((acc, r) => acc + (r[key] as number), 0);
+
+// Month display order (FY)
+const FY_MONTHS = ["April","May","June","July","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"];
+
+// Month → calendar number (for sortKey computation)
+const MONTH_TO_CAL: Record<string, number> = {
+  January:1,Jan:1, February:2,Feb:2, March:3,Mar:3,
+  April:4,Apr:4,  May:5,            June:6,Jun:6,
+  July:7,Jul:7,   August:8,Aug:8,   September:9,Sep:9,
+  October:10,Oct:10, November:11,Nov:11, December:12,Dec:12,
+};
+
+function sortKey(month: string, year: number) {
+  return year * 100 + (MONTH_TO_CAL[month] ?? 0);
 }
 
-interface BUSchema {
-  newTab: string;
-  fields: FieldDef[];
-}
+// ─── Add/Edit BU Schema (for entry modal) ────────────────────────────────────
 
-// "CONSOLIDATED OPS" is excluded — it's an aggregation, not a data-entry BU
+interface FieldDef { label: string; group?: string }
+interface BUSchema  { newTab: string; fields: FieldDef[] }
+
 const BU_SCHEMA: Record<string, BUSchema> = {
   "AASA": {
     newTab: "AASA_new",
     fields: [
       { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" },
-      { label: "Airfreight Profit (USD)" },
+      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
       { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" },
-      { label: "Solution Profit (USD)" },
+      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
       { label: "Staff", group: "General" },
     ],
   },
@@ -56,14 +71,11 @@ const BU_SCHEMA: Record<string, BUSchema> = {
     newTab: "AAINT_new",
     fields: [
       { label: "Export Shipments", group: "Airfreight Export" },
-      { label: "Export Weight (kg)" },
-      { label: "Export Profit (USD)" },
+      { label: "Export Weight (kg)" }, { label: "Export Profit (USD)" },
       { label: "Import Shipments", group: "Airfreight Import" },
-      { label: "Import Weight (kg)" },
-      { label: "Import Profit (USD)" },
+      { label: "Import Weight (kg)" }, { label: "Import Profit (USD)" },
       { label: "Ocean Shipments", group: "Ocean Freight" },
-      { label: "Ocean Weight (CBM)" },
-      { label: "Ocean Profit (USD)" },
+      { label: "Ocean Weight (CBM)" }, { label: "Ocean Profit (USD)" },
       { label: "Staff", group: "General" },
     ],
   },
@@ -71,14 +83,11 @@ const BU_SCHEMA: Record<string, BUSchema> = {
     newTab: "AAEA_new",
     fields: [
       { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" },
-      { label: "Airfreight Profit (USD)" },
+      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
       { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" },
-      { label: "Solution Profit (USD)" },
+      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
       { label: "Gulf Air Shipments", group: "Gulf Air" },
-      { label: "Gulf Air Weight (kg)" },
-      { label: "Gulf Air Profit (USD)" },
+      { label: "Gulf Air Weight (kg)" }, { label: "Gulf Air Profit (USD)" },
       { label: "Staff", group: "General" },
     ],
   },
@@ -86,11 +95,9 @@ const BU_SCHEMA: Record<string, BUSchema> = {
     newTab: "AAWN_new",
     fields: [
       { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" },
-      { label: "Airfreight Profit (USD)" },
+      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
       { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" },
-      { label: "Solution Profit (USD)" },
+      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
       { label: "Staff", group: "General" },
     ],
   },
@@ -98,11 +105,9 @@ const BU_SCHEMA: Record<string, BUSchema> = {
     newTab: "AACN_new",
     fields: [
       { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" },
-      { label: "Airfreight Profit (USD)" },
+      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
       { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" },
-      { label: "Solution Profit (USD)" },
+      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
       { label: "Staff", group: "General" },
     ],
   },
@@ -110,109 +115,112 @@ const BU_SCHEMA: Record<string, BUSchema> = {
     newTab: "AAMA_new",
     fields: [
       { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" },
-      { label: "Airfreight Profit (USD)" },
+      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
       { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" },
-      { label: "Solution Profit (USD)" },
+      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
       { label: "Staff", group: "General" },
     ],
   },
 };
 
-// Must match month names used in _new sheets (mixed full/abbreviated)
-const MONTHS = ["April", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-
-// Map from BUData display months (e.g. "Apr") → _new tab month names
 const MONTH_NAME_MAP: Record<string, string> = {
-  "Apr": "April", "May": "May", "Jun": "June", "Jul": "July",
-  "Aug": "Aug", "Sep": "Sep", "Oct": "Oct", "Nov": "Nov",
-  "Dec": "Dec", "Jan": "Jan", "Feb": "Feb", "Mar": "Mar",
+  "Apr":"April","May":"May","Jun":"June","Jul":"July",
+  "Aug":"Aug","Sep":"Sep","Oct":"Oct","Nov":"Nov",
+  "Dec":"Dec","Jan":"Jan","Feb":"Feb","Mar":"Mar",
 };
 
-// FYE: Apr–Dec = 2025, Jan–Mar = 2026
-const MONTH_YEAR_MAP: Record<string, number> = {
-  "Apr": 2025, "May": 2025, "Jun": 2025, "Jul": 2025,
-  "Aug": 2025, "Sep": 2025, "Oct": 2025, "Nov": 2025, "Dec": 2025,
-  "Jan": 2026, "Feb": 2026, "Mar": 2026,
-};
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function BUDashboard({ buSheets }: Props) {
   const [selected, setSelected] = useState(0);
-  const [fromIdx, setFromIdx] = useState(0);
-  const [toIdx, setToIdx] = useState(11);
 
   const bu = buSheets[selected];
-  const d = bu.data;
+  const allRecords = bu.records;
 
-  // Month labels for the filter dropdowns (same order as d.months)
-  const MONTH_LABELS = d.months; // ["Apr","May",...,"Mar"]
+  // ── Date range filter ────────────────────────────────────────────────────
+  const availableYears = useMemo(() => {
+    const ys = new Set<number>();
+    buSheets.forEach((b) => b.records.forEach((r) => ys.add(r.year)));
+    return Array.from(ys).sort();
+  }, [buSheets]);
 
-  // Filtered indices
-  const filteredIndices = Array.from(
-    { length: toIdx - fromIdx + 1 },
-    (_, i) => fromIdx + i
+  const minYear = availableYears[0] ?? new Date().getFullYear();
+  const maxYear = availableYears[availableYears.length - 1] ?? new Date().getFullYear();
+
+  // Default from = earliest record, to = latest record
+  const firstRecord = allRecords[0];
+  const lastRecord  = allRecords[allRecords.length - 1];
+
+  const [fromMonth, setFromMonth] = useState(firstRecord?.month ?? "April");
+  const [fromYear,  setFromYear]  = useState(firstRecord?.year  ?? minYear);
+  const [toMonth,   setToMonth]   = useState(lastRecord?.month  ?? "Mar");
+  const [toYear,    setToYear]    = useState(lastRecord?.year   ?? maxYear);
+
+  const fromKey = sortKey(fromMonth, fromYear);
+  const toKey   = sortKey(toMonth,   toYear);
+
+  const filtered = useMemo(
+    () => allRecords.filter((r) => r.sortKey >= fromKey && r.sortKey <= toKey),
+    [allRecords, fromKey, toKey]
   );
 
-  // Helper: sum an array over filtered indices
-  const sumFiltered = (arr: number[]) =>
-    filteredIndices.reduce((acc, i) => acc + (arr[i] ?? 0), 0);
+  const isFiltered = fromKey !== (firstRecord ? sortKey(firstRecord.month, firstRecord.year) : 0)
+    || toKey !== (lastRecord ? sortKey(lastRecord.month, lastRecord.year) : 0);
 
-  // Filtered totals — recalculated from monthly arrays
-  const ft = {
-    shipments: sumFiltered(d.shipments),
-    weight: sumFiltered(d.weight),
-    profit: sumFiltered(d.profit),
-    totalProfit: sumFiltered(d.totalProfit),
-    solutionShipments: sumFiltered(d.solutionShipments),
-    solutionWeight: sumFiltered(d.solutionWeight),
-    solutionProfit: sumFiltered(d.solutionProfit),
-    oceanShipments: sumFiltered(d.oceanShipments),
-    oceanWeight: sumFiltered(d.oceanWeight),
-    oceanProfit: sumFiltered(d.oceanProfit),
-    gulfShipments: sumFiltered(d.gulfShipments),
-    gulfWeight: sumFiltered(d.gulfWeight),
-    gulfProfit: sumFiltered(d.gulfProfit),
-    profitPerShipment: 0,
-  };
-  ft.profitPerShipment = ft.shipments > 0 ? ft.totalProfit / ft.shipments : 0;
+  // ── Totals from filtered records ─────────────────────────────────────────
+  const ft = useMemo(() => {
+    const s = (key: keyof BURecord) => sum(filtered, key);
+    const afShips  = s("airfreightShipments");
+    const totProfit = s("totalProfit");
+    return {
+      airfreightShipments: afShips,
+      airfreightWeight:    s("airfreightWeight"),
+      airfreightProfit:    s("airfreightProfit"),
+      solutionShipments:   s("solutionShipments"),
+      solutionWeight:      s("solutionWeight"),
+      solutionProfit:      s("solutionProfit"),
+      oceanShipments:      s("oceanShipments"),
+      oceanWeight:         s("oceanWeight"),
+      oceanProfit:         s("oceanProfit"),
+      gulfShipments:       s("gulfShipments"),
+      gulfWeight:          s("gulfWeight"),
+      gulfProfit:          s("gulfProfit"),
+      totalProfit:         totProfit,
+      profitPerShipment:   afShips > 0 ? totProfit / afShips : 0,
+      staff:               filtered.length > 0 ? filtered[filtered.length - 1].staff : 0,
+    };
+  }, [filtered]);
 
-  const isFiltered = fromIdx !== 0 || toIdx !== 11;
+  // ── Chart data ───────────────────────────────────────────────────────────
+  const chartData = filtered.map((r) => ({
+    month: `${r.month} ${r.year}`,
+    profit: r.totalProfit,
+    shipments: r.airfreightShipments,
+  }));
 
-  // Modal state
-  const [showModal, setShowModal] = useState(false);
-  const [modalBU, setModalBU] = useState<BUEntry | null>(null);
-  const [month, setMonth] = useState("April");
-  const [year, setYear] = useState(new Date().getFullYear());
+  // ── Edit modal state ─────────────────────────────────────────────────────
+  const [showModal, setShowModal]   = useState(false);
+  const [modalBU,   setModalBU]     = useState<BUEntry | null>(null);
+  const [editMonth, setEditMonth]   = useState("April");
+  const [editYear,  setEditYear]    = useState(new Date().getFullYear());
   const [fieldValues, setFieldValues] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [fetching, setFetching] = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [fetching,    setFetching]    = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  const chartData = filteredIndices.map((i) => ({
-    month: d.months[i],
-    profit: d.totalProfit[i],
-    shipments: d.shipments[i],
-    weight: Math.round(d.weight[i]),
-  }));
 
   const openModal = async (buEntry: BUEntry, prefillMonth?: string, prefillYear?: number) => {
     const schema = BU_SCHEMA[buEntry.name];
     if (!schema) return;
-
     const m = prefillMonth ?? "April";
     const y = prefillYear ?? new Date().getFullYear();
-
     setModalBU(buEntry);
-    setMonth(m);
-    setYear(y);
+    setEditMonth(m);
+    setEditYear(y);
     setFieldValues(schema.fields.map(() => ""));
     setSubmitError("");
     setSubmitSuccess(false);
     setShowModal(true);
-
-    // Fetch existing row data if a specific month was clicked
     if (prefillMonth) {
       setFetching(true);
       try {
@@ -223,11 +231,7 @@ export default function BUDashboard({ buSheets }: Props) {
         if (data.found && data.fields.length > 0) {
           setFieldValues(schema.fields.map((_, i) => data.fields[i] ?? ""));
         }
-      } catch {
-        // silently ignore — user can fill in manually
-      } finally {
-        setFetching(false);
-      }
+      } catch { /* ignore */ } finally { setFetching(false); }
     }
   };
 
@@ -238,90 +242,55 @@ export default function BUDashboard({ buSheets }: Props) {
     setSubmitSuccess(false);
   };
 
-  const updateField = (i: number, val: string) => {
-    setFieldValues((prev) => {
-      const next = [...prev];
-      next[i] = val;
-      return next;
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalBU) return;
     const schema = BU_SCHEMA[modalBU.name];
     if (!schema) return;
-
     setSubmitting(true);
     setSubmitError("");
-
     try {
       const res = await fetch("/api/bu-entries", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tab: schema.newTab,
-          month,
-          year,
-          fields: fieldValues,
-        }),
+        body: JSON.stringify({ tab: schema.newTab, month: editMonth, year: editYear, fields: fieldValues }),
       });
-
       const data = await res.json();
-      if (!res.ok) {
-        setSubmitError(data.error || "Something went wrong.");
-        return;
-      }
-
+      if (!res.ok) { setSubmitError(data.error || "Something went wrong."); return; }
       setSubmitSuccess(true);
-      setTimeout(() => {
-        setShowModal(false);
-        setSubmitSuccess(false);
-      }, 2000);
-    } catch {
-      setSubmitError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+      setTimeout(() => { setShowModal(false); setSubmitSuccess(false); }, 2000);
+    } catch { setSubmitError("Network error. Please try again."); }
+    finally  { setSubmitting(false); }
   };
 
   const inputStyle: React.CSSProperties = {
-    background: "var(--surface2)",
-    border: "1px solid var(--border)",
-    color: "var(--text)",
-    borderRadius: "0.5rem",
-    padding: "0.45rem 0.75rem",
-    width: "100%",
-    fontSize: "0.875rem",
-    outline: "none",
+    background: "var(--surface2)", border: "1px solid var(--border)",
+    color: "var(--text)", borderRadius: "0.5rem",
+    padding: "0.45rem 0.75rem", width: "100%", fontSize: "0.875rem", outline: "none",
   };
-
   const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: "0.72rem",
-    fontWeight: 500,
-    color: "var(--muted)",
-    marginBottom: "0.2rem",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
+    display: "block", fontSize: "0.72rem", fontWeight: 500,
+    color: "var(--muted)", marginBottom: "0.2rem",
+    textTransform: "uppercase", letterSpacing: "0.04em",
   };
-
   const schema = modalBU ? BU_SCHEMA[modalBU.name] : null;
+
+  const selectStyle: React.CSSProperties = {
+    background: "var(--surface)", border: "1px solid var(--border)",
+    color: "var(--text)", borderRadius: "0.5rem",
+    padding: "0.375rem 0.625rem", fontSize: "0.875rem", outline: "none",
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>
-          Business Unit Report
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-          Aero Africa — FYE 2026 (Apr 2025 – Mar 2026)
-        </p>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Business Unit Report</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Aero Africa</p>
       </div>
 
       {/* BU Selector */}
-      <div className="flex flex-wrap gap-2 mb-8">
+      <div className="flex flex-wrap gap-2 mb-6">
         {buSheets.map((b, i) => (
           <div key={b.name} className="flex items-center gap-1">
             <button
@@ -330,8 +299,7 @@ export default function BUDashboard({ buSheets }: Props) {
               style={{
                 background: selected === i ? "var(--accent)" : "var(--surface2)",
                 color: selected === i ? "#fff" : "var(--text)",
-                border: "1px solid",
-                borderColor: selected === i ? "var(--accent)" : "var(--border)",
+                border: "1px solid", borderColor: selected === i ? "var(--accent)" : "var(--border)",
               }}
             >
               {b.label}
@@ -340,124 +308,113 @@ export default function BUDashboard({ buSheets }: Props) {
               <button
                 onClick={() => openModal(b)}
                 title={`Add entry for ${b.label}`}
-                className="flex items-center justify-center rounded-lg text-xs font-bold transition-colors"
                 style={{
-                  width: "28px",
-                  height: "36px",
-                  background: "var(--surface2)",
-                  color: "var(--accent)",
-                  border: "1px solid var(--border)",
-                  cursor: "pointer",
+                  width: "28px", height: "36px", background: "var(--surface2)",
+                  color: "var(--accent)", border: "1px solid var(--border)",
+                  borderRadius: "0.5rem", cursor: "pointer", fontWeight: 700, fontSize: "1rem",
                 }}
-              >
-                +
-              </button>
+              >+</button>
             )}
           </div>
         ))}
       </div>
 
       {/* Period Filter */}
-      <div className="flex flex-wrap items-center gap-3 mb-6 p-3 rounded-xl" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+      <div className="flex flex-wrap items-center gap-3 mb-6 p-3 rounded-xl"
+        style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
         <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>Period</span>
-        <div className="flex items-center gap-2">
-          <select
-            value={fromIdx}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setFromIdx(v);
-              if (v > toIdx) setToIdx(v);
-            }}
-            className="px-3 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
-          >
-            {MONTH_LABELS.map((m, i) => (
-              <option key={m} value={i}>{m}</option>
-            ))}
+
+        {/* From */}
+        <div className="flex items-center gap-1.5">
+          <select value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} style={selectStyle}>
+            {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
-          <span style={{ color: "var(--muted)", fontSize: "0.875rem" }}>→</span>
-          <select
-            value={toIdx}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setToIdx(v);
-              if (v < fromIdx) setFromIdx(v);
-            }}
-            className="px-3 py-1.5 rounded-lg text-sm outline-none"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
-          >
-            {MONTH_LABELS.map((m, i) => (
-              <option key={m} value={i}>{m}</option>
-            ))}
+          <select value={fromYear} onChange={(e) => setFromYear(Number(e.target.value))} style={selectStyle}>
+            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
+
+        <span style={{ color: "var(--muted)", fontSize: "0.875rem" }}>→</span>
+
+        {/* To */}
+        <div className="flex items-center gap-1.5">
+          <select value={toMonth} onChange={(e) => setToMonth(e.target.value)} style={selectStyle}>
+            {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={toYear} onChange={(e) => setToYear(Number(e.target.value))} style={selectStyle}>
+            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+
         {isFiltered && (
           <button
-            onClick={() => { setFromIdx(0); setToIdx(11); }}
-            className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)", cursor: "pointer" }}
-          >
-            Reset
-          </button>
+            onClick={() => {
+              setFromMonth(firstRecord?.month ?? "April");
+              setFromYear(firstRecord?.year   ?? minYear);
+              setToMonth(lastRecord?.month ?? "Mar");
+              setToYear(lastRecord?.year   ?? maxYear);
+            }}
+            style={{
+              background: "var(--surface)", border: "1px solid var(--border)",
+              color: "var(--accent)", borderRadius: "0.5rem",
+              padding: "0.375rem 0.75rem", fontSize: "0.75rem", cursor: "pointer",
+            }}
+          >Reset</button>
         )}
+
         <span className="text-xs ml-auto" style={{ color: "var(--muted)" }}>
-          {filteredIndices.length} month{filteredIndices.length !== 1 ? "s" : ""}
-          {isFiltered ? ` (filtered from 12)` : ""}
+          {filtered.length} month{filtered.length !== 1 ? "s" : ""}
+          {isFiltered && ` • filtered`}
         </span>
       </div>
 
       {/* KPI Cards */}
       <div className="space-y-4 mb-8">
-        {/* Row 1: Core */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPICard label="Total Profit" value={fmtUSD(ft.totalProfit)} sub="All freight types" />
-          <KPICard label="Profit / Shipment" value={ft.profitPerShipment ? fmtUSD(ft.profitPerShipment) : "—"} sub="Air freight" />
-          <KPICard label="Staff" value={String(d.staff || "—")} sub="incl. managers" />
-          <KPICard label="Air Freight Shipments" value={fmt(ft.shipments)} sub="Total files" />
+          <KPICard label="Total Profit"         value={fmtUSD(ft.totalProfit)}                                   sub="All freight types" />
+          <KPICard label="Profit / Shipment"    value={ft.profitPerShipment ? fmtUSD(ft.profitPerShipment) : "—"} sub="Air freight"       />
+          <KPICard label="Staff"                value={String(ft.staff || "—")}                                   sub="incl. managers"    />
+          <KPICard label="AF Shipments"         value={fmt(ft.airfreightShipments)}                              sub="Total files"       />
         </div>
 
-        {/* Row 2: Air Freight */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Air Freight</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <KPICard label="Shipments" value={fmt(ft.shipments)} sub="Total files" />
-            <KPICard label="Chargeable Weight" value={fmt(ft.weight, "") + " kg"} sub="Air freight" />
-            <KPICard label="Profit (USD)" value={fmtUSD(ft.profit)} sub="Air freight" />
+            <KPICard label="Shipments"         value={fmt(ft.airfreightShipments)}              sub="Total files"  />
+            <KPICard label="Chargeable Weight" value={fmt(ft.airfreightWeight, "") + " kg"}      sub="Air freight"  />
+            <KPICard label="Profit (USD)"      value={fmtUSD(ft.airfreightProfit)}               sub="Air freight"  />
           </div>
         </div>
 
-        {/* Row 3: Solution (if any) */}
         {ft.solutionShipments > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Solution</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <KPICard label="Shipments" value={fmt(ft.solutionShipments)} sub="Solution files" />
-              <KPICard label="Chargeable Weight" value={fmt(ft.solutionWeight, "") + " kg"} sub="Solution" />
-              <KPICard label="Profit (USD)" value={fmtUSD(ft.solutionProfit)} sub="Solution" />
+              <KPICard label="Shipments"         value={fmt(ft.solutionShipments)}             sub="Solution files" />
+              <KPICard label="Chargeable Weight" value={fmt(ft.solutionWeight, "") + " kg"}     sub="Solution"       />
+              <KPICard label="Profit (USD)"      value={fmtUSD(ft.solutionProfit)}              sub="Solution"       />
             </div>
           </div>
         )}
 
-        {/* Row 4: Ocean Freight — INT only */}
         {ft.oceanShipments > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Ocean Freight</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <KPICard label="Shipments" value={fmt(ft.oceanShipments)} sub="Ocean files" />
-              <KPICard label="Weight (CBM)" value={fmt(ft.oceanWeight, "") + " CBM"} sub="Ocean" />
-              <KPICard label="Profit (USD)" value={fmtUSD(ft.oceanProfit)} sub="Ocean" />
+              <KPICard label="Shipments"   value={fmt(ft.oceanShipments)}               sub="Ocean files"  />
+              <KPICard label="Weight (CBM)" value={fmt(ft.oceanWeight, "") + " CBM"}    sub="Ocean"        />
+              <KPICard label="Profit (USD)" value={fmtUSD(ft.oceanProfit)}               sub="Ocean"        />
             </div>
           </div>
         )}
 
-        {/* Row 5: Gulf Air — EA / Consolidated only */}
         {ft.gulfShipments > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Gulf Air</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <KPICard label="Shipments / AWBs" value={fmt(ft.gulfShipments)} sub="Gulf Air" />
+              <KPICard label="Shipments / AWBs"  value={fmt(ft.gulfShipments)}          sub="Gulf Air" />
               <KPICard label="Chargeable Weight" value={fmt(ft.gulfWeight, "") + " kg"} sub="Gulf Air" />
-              <KPICard label="Profit (USD)" value={fmtUSD(ft.gulfProfit)} sub="Gulf Air" />
+              <KPICard label="Profit (USD)"      value={fmtUSD(ft.gulfProfit)}           sub="Gulf Air" />
             </div>
           </div>
         )}
@@ -466,13 +423,11 @@ export default function BUDashboard({ buSheets }: Props) {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="p-5 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--muted)" }}>
-            Monthly Total Profit (USD)
-          </h3>
+          <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--muted)" }}>Monthly Total Profit (USD)</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v, "$")} />
               <Tooltip
                 contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8 }}
@@ -485,13 +440,11 @@ export default function BUDashboard({ buSheets }: Props) {
         </div>
 
         <div className="p-5 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--muted)" }}>
-            Monthly Shipments
-          </h3>
+          <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--muted)" }}>Monthly Shipments</h3>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v)} />
               <Tooltip
                 contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8 }}
@@ -506,7 +459,7 @@ export default function BUDashboard({ buSheets }: Props) {
         </div>
       </div>
 
-      {/* Data Table */}
+      {/* Monthly Table */}
       <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
         <div className="px-5 py-3" style={{ background: "var(--surface2)" }}>
           <h3 className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
@@ -524,51 +477,51 @@ export default function BUDashboard({ buSheets }: Props) {
               </tr>
             </thead>
             <tbody>
-              {filteredIndices.map((i) => {
-                const m = d.months[i];
+              {filtered.map((r, i) => {
                 const hasSchema = !!BU_SCHEMA[bu.name];
-                const tabMonth = MONTH_NAME_MAP[m] ?? m;
-                const tabYear = MONTH_YEAR_MAP[m] ?? new Date().getFullYear();
+                const tabMonth  = MONTH_NAME_MAP[r.month] ?? r.month;
                 return (
-                <tr
-                  key={m}
-                  onClick={() => hasSchema && openModal(bu, tabMonth, tabYear)}
-                  style={{
-                    borderTop: "1px solid var(--border)",
-                    background: i % 2 === 0 ? "var(--surface)" : "transparent",
-                    cursor: hasSchema ? "pointer" : "default",
-                  }}
-                  title={hasSchema ? `Edit ${m} data` : undefined}
-                  className={hasSchema ? "hover:opacity-80 transition-opacity" : ""}
-                >
-                  <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      {m}
-                      {hasSchema && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>✎ edit</span>}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
-                    {d.shipments[i] ? d.shipments[i].toLocaleString() : "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
-                    {d.weight[i] ? Math.round(d.weight[i]).toLocaleString() : "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-medium"
-                    style={{ color: d.totalProfit[i] > 0 ? "var(--accent)" : d.totalProfit[i] < 0 ? "#dc2626" : "var(--muted)" }}>
-                    {d.totalProfit[i] ? fmtUSD(d.totalProfit[i]) : "—"}
-                  </td>
-                </tr>
+                  <tr
+                    key={`${r.month}-${r.year}`}
+                    onClick={() => hasSchema && openModal(bu, tabMonth, r.year)}
+                    style={{
+                      borderTop: "1px solid var(--border)",
+                      background: i % 2 === 0 ? "var(--surface)" : "transparent",
+                      cursor: hasSchema ? "pointer" : "default",
+                    }}
+                    className={hasSchema ? "hover:opacity-80 transition-opacity" : ""}
+                  >
+                    <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>
+                      <span className="flex items-center gap-1.5">
+                        {r.month} {r.year}
+                        {hasSchema && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>✎ edit</span>}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
+                      {r.airfreightShipments ? r.airfreightShipments.toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
+                      {r.airfreightWeight ? Math.round(r.airfreightWeight).toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-medium"
+                      style={{ color: r.totalProfit > 0 ? "var(--accent)" : r.totalProfit < 0 ? "#dc2626" : "var(--muted)" }}>
+                      {r.totalProfit ? fmtUSD(r.totalProfit) : "—"}
+                    </td>
+                  </tr>
                 );
               })}
+              {filtered.length === 0 && (
+                <tr><td colSpan={4} className="text-center py-10" style={{ color: "var(--muted)" }}>No data for selected period</td></tr>
+              )}
               <tr style={{ borderTop: "2px solid var(--accent)", background: "var(--surface2)" }}>
                 <td className="px-4 py-3 font-semibold" style={{ color: "var(--text)" }}>
-                  {isFiltered ? `Total (${filteredIndices.length} mo.)` : "Total"}
+                  Total{isFiltered ? ` (${filtered.length} mo.)` : ""}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
-                  {ft.shipments.toLocaleString()}
+                  {ft.airfreightShipments.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
-                  {Math.round(ft.weight).toLocaleString()}
+                  {Math.round(ft.airfreightWeight).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--accent)" }}>
                   {fmtUSD(ft.totalProfit)}
@@ -579,18 +532,15 @@ export default function BUDashboard({ buSheets }: Props) {
         </div>
       </div>
 
-      {/* Add Entry Modal */}
+      {/* Edit Modal */}
       {showModal && modalBU && schema && (
         <div
           className="fixed inset-0 flex items-center justify-center z-[60] p-4"
           style={{ background: "rgba(0,0,0,0.5)" }}
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
-          <div
-            className="w-full max-w-lg rounded-xl shadow-2xl overflow-hidden"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", maxHeight: "90vh", overflowY: "auto" }}
-          >
-            {/* Header */}
+          <div className="w-full max-w-lg rounded-xl shadow-2xl overflow-hidden"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", maxHeight: "90vh", overflowY: "auto" }}>
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
               <div>
                 <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>Edit Entry</h2>
@@ -612,40 +562,32 @@ export default function BUDashboard({ buSheets }: Props) {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
-                {/* Month + Year */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>Month</label>
-                    <select value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle}>
-                      {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    <select value={editMonth} onChange={(e) => setEditMonth(e.target.value)} style={inputStyle}>
+                      {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={labelStyle}>Year</label>
-                    <input
-                      type="number"
-                      value={year}
-                      onChange={(e) => setYear(Number(e.target.value))}
-                      min={2020}
-                      max={2099}
-                      style={inputStyle}
-                    />
+                    <input type="number" value={editYear} onChange={(e) => setEditYear(Number(e.target.value))}
+                      min={2020} max={2099} style={inputStyle} />
                   </div>
                 </div>
 
-                {/* Dynamic fields grouped by section */}
                 {(() => {
                   const elements: React.ReactNode[] = [];
                   let currentGroup = "";
                   const groupFields: { def: FieldDef; idx: number }[] = [];
-
                   const flushGroup = () => {
-                    if (groupFields.length === 0) return;
+                    if (!groupFields.length) return;
                     const cols = groupFields.length === 1 ? "grid-cols-1" : groupFields.length === 2 ? "grid-cols-2" : "grid-cols-3";
                     elements.push(
                       <div key={currentGroup}>
                         {currentGroup && (
-                          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "4px" }}>
+                          <div className="text-xs font-semibold uppercase tracking-wider mb-2"
+                            style={{ color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "4px" }}>
                             {currentGroup}
                           </div>
                         )}
@@ -653,14 +595,13 @@ export default function BUDashboard({ buSheets }: Props) {
                           {groupFields.map(({ def, idx }) => (
                             <div key={idx}>
                               <label style={labelStyle}>{def.label}</label>
-                              <input
-                                type="number"
-                                step="any"
-                                value={fieldValues[idx]}
-                                onChange={(e) => updateField(idx, e.target.value)}
-                                placeholder="0"
-                                style={inputStyle}
-                              />
+                              <input type="number" step="any" value={fieldValues[idx]}
+                                onChange={(e) => {
+                                  const vals = [...fieldValues];
+                                  vals[idx] = e.target.value;
+                                  setFieldValues(vals);
+                                }}
+                                placeholder="0" style={inputStyle} />
                             </div>
                           ))}
                         </div>
@@ -668,48 +609,29 @@ export default function BUDashboard({ buSheets }: Props) {
                     );
                     groupFields.length = 0;
                   };
-
                   schema.fields.forEach((def, idx) => {
-                    if (def.group && def.group !== currentGroup) {
-                      flushGroup();
-                      currentGroup = def.group;
-                    }
+                    if (def.group && def.group !== currentGroup) { flushGroup(); currentGroup = def.group; }
                     groupFields.push({ def, idx });
                   });
                   flushGroup();
-
                   return elements;
                 })()}
 
-                {submitError && (
-                  <p className="text-sm" style={{ color: "#dc2626" }}>{submitError}</p>
-                )}
+                {submitError && <p className="text-sm" style={{ color: "#dc2626" }}>{submitError}</p>}
 
                 <div className="flex flex-col gap-2 pt-1">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    style={{
-                      background: submitting ? "var(--muted)" : "var(--accent)",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "0.5rem",
-                      padding: "0.625rem",
-                      fontWeight: 600,
-                      fontSize: "0.875rem",
-                      cursor: submitting ? "not-allowed" : "pointer",
-                      width: "100%",
-                    }}
-                  >
+                  <button type="submit" disabled={submitting} style={{
+                    background: submitting ? "var(--muted)" : "var(--accent)", color: "#fff",
+                    border: "none", borderRadius: "0.5rem", padding: "0.625rem",
+                    fontWeight: 600, fontSize: "0.875rem",
+                    cursor: submitting ? "not-allowed" : "pointer", width: "100%",
+                  }}>
                     {submitting ? "Saving…" : "Update Entry"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "0.875rem", padding: "0.375rem" }}
-                  >
-                    Cancel
-                  </button>
+                  <button type="button" onClick={closeModal} style={{
+                    background: "none", border: "none", color: "var(--muted)",
+                    cursor: "pointer", fontSize: "0.875rem", padding: "0.375rem",
+                  }}>Cancel</button>
                 </div>
               </form>
             )}
