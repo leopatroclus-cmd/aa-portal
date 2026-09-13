@@ -149,6 +149,7 @@ export default function BUDashboard({ buSheets }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [fieldValues, setFieldValues] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
@@ -159,16 +160,38 @@ export default function BUDashboard({ buSheets }: Props) {
     weight: Math.round(d.weight[i]),
   }));
 
-  const openModal = (buEntry: BUEntry, prefillMonth?: string, prefillYear?: number) => {
+  const openModal = async (buEntry: BUEntry, prefillMonth?: string, prefillYear?: number) => {
     const schema = BU_SCHEMA[buEntry.name];
     if (!schema) return;
+
+    const m = prefillMonth ?? "April";
+    const y = prefillYear ?? new Date().getFullYear();
+
     setModalBU(buEntry);
-    setMonth(prefillMonth ?? "April");
-    setYear(prefillYear ?? new Date().getFullYear());
+    setMonth(m);
+    setYear(y);
     setFieldValues(schema.fields.map(() => ""));
     setSubmitError("");
     setSubmitSuccess(false);
     setShowModal(true);
+
+    // Fetch existing row data if a specific month was clicked
+    if (prefillMonth) {
+      setFetching(true);
+      try {
+        const res = await fetch(
+          `/api/bu-entries?tab=${encodeURIComponent(schema.newTab)}&month=${encodeURIComponent(m)}&year=${y}`
+        );
+        const data = await res.json();
+        if (data.found && data.fields.length > 0) {
+          setFieldValues(schema.fields.map((_, i) => data.fields[i] ?? ""));
+        }
+      } catch {
+        // silently ignore — user can fill in manually
+      } finally {
+        setFetching(false);
+      }
+    }
   };
 
   const closeModal = () => {
@@ -197,7 +220,7 @@ export default function BUDashboard({ buSheets }: Props) {
 
     try {
       const res = await fetch("/api/bu-entries", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tab: schema.newTab,
@@ -379,13 +402,13 @@ export default function BUDashboard({ buSheets }: Props) {
                     background: i % 2 === 0 ? "var(--surface)" : "transparent",
                     cursor: hasSchema ? "pointer" : "default",
                   }}
-                  title={hasSchema ? `Add entry for ${m}` : undefined}
+                  title={hasSchema ? `Edit ${m} data` : undefined}
                   className={hasSchema ? "hover:opacity-80 transition-opacity" : ""}
                 >
                   <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                       {m}
-                      {hasSchema && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>+ add</span>}
+                      {hasSchema && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>✎ edit</span>}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
@@ -432,7 +455,7 @@ export default function BUDashboard({ buSheets }: Props) {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
               <div>
-                <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>Add Entry</h2>
+                <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>Edit Entry</h2>
                 <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{modalBU.label}</p>
               </div>
               <button onClick={closeModal} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "1.25rem" }}>✕</button>
@@ -441,8 +464,13 @@ export default function BUDashboard({ buSheets }: Props) {
             {submitSuccess ? (
               <div className="px-6 py-12 text-center">
                 <div className="text-3xl mb-3">✅</div>
-                <p className="font-semibold" style={{ color: "var(--text)" }}>Entry added!</p>
+                <p className="font-semibold" style={{ color: "var(--text)" }}>Saved!</p>
                 <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Refresh to see changes.</p>
+              </div>
+            ) : fetching ? (
+              <div className="px-6 py-12 text-center" style={{ color: "var(--muted)" }}>
+                <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>⏳</div>
+                Loading existing data…
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
@@ -535,7 +563,7 @@ export default function BUDashboard({ buSheets }: Props) {
                       width: "100%",
                     }}
                   >
-                    {submitting ? "Saving…" : "Save Entry"}
+                    {submitting ? "Saving…" : "Update Entry"}
                   </button>
                   <button
                     type="button"
