@@ -66,6 +66,14 @@ export interface BUData {
   months: string[];
   shipments: number[];
   solutionShipments: number[];
+  solutionWeight: number[];
+  solutionProfit: number[];
+  oceanShipments: number[];
+  oceanWeight: number[];
+  oceanProfit: number[];
+  gulfShipments: number[];
+  gulfWeight: number[];
+  gulfProfit: number[];
   weight: number[];
   profit: number[];
   totalProfit: number[];
@@ -153,6 +161,14 @@ export async function fetchBUData(sheetName: string): Promise<BUData> {
     months: MONTHS,
     shipments: extract(shipmentsRow),
     solutionShipments: extract(solutionShipmentsRow),
+    solutionWeight: extract(solutionWeightRow),
+    solutionProfit: extract(solutionProfitRow),
+    oceanShipments: extract(oceanShipmentsRow),
+    oceanWeight: oceanShipmentsRow ? extract(thirdWeightRow) : MONTHS.map(() => 0),
+    oceanProfit: oceanShipmentsRow ? extract(thirdProfitRow) : MONTHS.map(() => 0),
+    gulfShipments: extract(gulfShipmentsRow),
+    gulfWeight: gulfShipmentsRow && !oceanShipmentsRow ? extract(thirdWeightRow) : MONTHS.map(() => 0),
+    gulfProfit: gulfShipmentsRow && !oceanShipmentsRow ? extract(thirdProfitRow) : MONTHS.map(() => 0),
     weight: extract(weightRow),
     profit: extract(profitRow),
     totalProfit: extract(totalFileProfitRow),

@@ -139,8 +139,45 @@ const MONTH_YEAR_MAP: Record<string, number> = {
 
 export default function BUDashboard({ buSheets }: Props) {
   const [selected, setSelected] = useState(0);
+  const [fromIdx, setFromIdx] = useState(0);
+  const [toIdx, setToIdx] = useState(11);
+
   const bu = buSheets[selected];
   const d = bu.data;
+
+  // Month labels for the filter dropdowns (same order as d.months)
+  const MONTH_LABELS = d.months; // ["Apr","May",...,"Mar"]
+
+  // Filtered indices
+  const filteredIndices = Array.from(
+    { length: toIdx - fromIdx + 1 },
+    (_, i) => fromIdx + i
+  );
+
+  // Helper: sum an array over filtered indices
+  const sumFiltered = (arr: number[]) =>
+    filteredIndices.reduce((acc, i) => acc + (arr[i] ?? 0), 0);
+
+  // Filtered totals — recalculated from monthly arrays
+  const ft = {
+    shipments: sumFiltered(d.shipments),
+    weight: sumFiltered(d.weight),
+    profit: sumFiltered(d.profit),
+    totalProfit: sumFiltered(d.totalProfit),
+    solutionShipments: sumFiltered(d.solutionShipments),
+    solutionWeight: sumFiltered(d.solutionWeight),
+    solutionProfit: sumFiltered(d.solutionProfit),
+    oceanShipments: sumFiltered(d.oceanShipments),
+    oceanWeight: sumFiltered(d.oceanWeight),
+    oceanProfit: sumFiltered(d.oceanProfit),
+    gulfShipments: sumFiltered(d.gulfShipments),
+    gulfWeight: sumFiltered(d.gulfWeight),
+    gulfProfit: sumFiltered(d.gulfProfit),
+    profitPerShipment: 0,
+  };
+  ft.profitPerShipment = ft.shipments > 0 ? ft.totalProfit / ft.shipments : 0;
+
+  const isFiltered = fromIdx !== 0 || toIdx !== 11;
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -153,8 +190,8 @@ export default function BUDashboard({ buSheets }: Props) {
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const chartData = d.months.map((m, i) => ({
-    month: m,
+  const chartData = filteredIndices.map((i) => ({
+    month: d.months[i],
     profit: d.totalProfit[i],
     shipments: d.shipments[i],
     weight: Math.round(d.weight[i]),
@@ -320,58 +357,107 @@ export default function BUDashboard({ buSheets }: Props) {
         ))}
       </div>
 
+      {/* Period Filter */}
+      <div className="flex flex-wrap items-center gap-3 mb-6 p-3 rounded-xl" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>Period</span>
+        <div className="flex items-center gap-2">
+          <select
+            value={fromIdx}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setFromIdx(v);
+              if (v > toIdx) setToIdx(v);
+            }}
+            className="px-3 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            {MONTH_LABELS.map((m, i) => (
+              <option key={m} value={i}>{m}</option>
+            ))}
+          </select>
+          <span style={{ color: "var(--muted)", fontSize: "0.875rem" }}>→</span>
+          <select
+            value={toIdx}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setToIdx(v);
+              if (v < fromIdx) setFromIdx(v);
+            }}
+            className="px-3 py-1.5 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            {MONTH_LABELS.map((m, i) => (
+              <option key={m} value={i}>{m}</option>
+            ))}
+          </select>
+        </div>
+        {isFiltered && (
+          <button
+            onClick={() => { setFromIdx(0); setToIdx(11); }}
+            className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)", cursor: "pointer" }}
+          >
+            Reset
+          </button>
+        )}
+        <span className="text-xs ml-auto" style={{ color: "var(--muted)" }}>
+          {filteredIndices.length} month{filteredIndices.length !== 1 ? "s" : ""}
+          {isFiltered ? ` (filtered from 12)` : ""}
+        </span>
+      </div>
+
       {/* KPI Cards */}
       <div className="space-y-4 mb-8">
         {/* Row 1: Core */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPICard label="Total Profit" value={fmtUSD(d.totals.totalProfit)} sub="All freight types" />
-          <KPICard label="Profit / Shipment" value={d.totals.profitPerShipment ? fmtUSD(d.totals.profitPerShipment) : "—"} sub="Air freight" />
+          <KPICard label="Total Profit" value={fmtUSD(ft.totalProfit)} sub="All freight types" />
+          <KPICard label="Profit / Shipment" value={ft.profitPerShipment ? fmtUSD(ft.profitPerShipment) : "—"} sub="Air freight" />
           <KPICard label="Staff" value={String(d.staff || "—")} sub="incl. managers" />
-          <KPICard label="Air Freight Shipments" value={fmt(d.totals.shipments)} sub="Total files" />
+          <KPICard label="Air Freight Shipments" value={fmt(ft.shipments)} sub="Total files" />
         </div>
 
         {/* Row 2: Air Freight */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Air Freight</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <KPICard label="Shipments" value={fmt(d.totals.shipments)} sub="Total files" />
-            <KPICard label="Chargeable Weight" value={fmt(d.totals.weight, "") + " kg"} sub="Air freight" />
-            <KPICard label="Profit (USD)" value={fmtUSD(d.totals.profit)} sub="Air freight" />
+            <KPICard label="Shipments" value={fmt(ft.shipments)} sub="Total files" />
+            <KPICard label="Chargeable Weight" value={fmt(ft.weight, "") + " kg"} sub="Air freight" />
+            <KPICard label="Profit (USD)" value={fmtUSD(ft.profit)} sub="Air freight" />
           </div>
         </div>
 
         {/* Row 3: Solution (if any) */}
-        {d.totals.solutionShipments > 0 && (
+        {ft.solutionShipments > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Solution</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <KPICard label="Shipments" value={fmt(d.totals.solutionShipments)} sub="Solution files" />
-              <KPICard label="Chargeable Weight" value={fmt(d.totals.solutionWeight, "") + " kg"} sub="Solution" />
-              <KPICard label="Profit (USD)" value={fmtUSD(d.totals.solutionProfit)} sub="Solution" />
+              <KPICard label="Shipments" value={fmt(ft.solutionShipments)} sub="Solution files" />
+              <KPICard label="Chargeable Weight" value={fmt(ft.solutionWeight, "") + " kg"} sub="Solution" />
+              <KPICard label="Profit (USD)" value={fmtUSD(ft.solutionProfit)} sub="Solution" />
             </div>
           </div>
         )}
 
         {/* Row 4: Ocean Freight — INT only */}
-        {d.totals.oceanShipments > 0 && (
+        {ft.oceanShipments > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Ocean Freight</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <KPICard label="Shipments" value={fmt(d.totals.oceanShipments)} sub="Ocean files" />
-              <KPICard label="Weight (CBM)" value={fmt(d.totals.oceanWeight, "") + " CBM"} sub="Ocean" />
-              <KPICard label="Profit (USD)" value={fmtUSD(d.totals.oceanProfit)} sub="Ocean" />
+              <KPICard label="Shipments" value={fmt(ft.oceanShipments)} sub="Ocean files" />
+              <KPICard label="Weight (CBM)" value={fmt(ft.oceanWeight, "") + " CBM"} sub="Ocean" />
+              <KPICard label="Profit (USD)" value={fmtUSD(ft.oceanProfit)} sub="Ocean" />
             </div>
           </div>
         )}
 
         {/* Row 5: Gulf Air — EA / Consolidated only */}
-        {d.totals.gulfShipments > 0 && (
+        {ft.gulfShipments > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Gulf Air</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <KPICard label="Shipments / AWBs" value={fmt(d.totals.gulfShipments)} sub="Gulf Air" />
-              <KPICard label="Chargeable Weight" value={fmt(d.totals.gulfWeight, "") + " kg"} sub="Gulf Air" />
-              <KPICard label="Profit (USD)" value={fmtUSD(d.totals.gulfProfit)} sub="Gulf Air" />
+              <KPICard label="Shipments / AWBs" value={fmt(ft.gulfShipments)} sub="Gulf Air" />
+              <KPICard label="Chargeable Weight" value={fmt(ft.gulfWeight, "") + " kg"} sub="Gulf Air" />
+              <KPICard label="Profit (USD)" value={fmtUSD(ft.gulfProfit)} sub="Gulf Air" />
             </div>
           </div>
         )}
@@ -438,7 +524,8 @@ export default function BUDashboard({ buSheets }: Props) {
               </tr>
             </thead>
             <tbody>
-              {d.months.map((m, i) => {
+              {filteredIndices.map((i) => {
+                const m = d.months[i];
                 const hasSchema = !!BU_SCHEMA[bu.name];
                 const tabMonth = MONTH_NAME_MAP[m] ?? m;
                 const tabYear = MONTH_YEAR_MAP[m] ?? new Date().getFullYear();
@@ -474,15 +561,17 @@ export default function BUDashboard({ buSheets }: Props) {
                 );
               })}
               <tr style={{ borderTop: "2px solid var(--accent)", background: "var(--surface2)" }}>
-                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text)" }}>Total</td>
-                <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
-                  {d.totals.shipments.toLocaleString()}
+                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text)" }}>
+                  {isFiltered ? `Total (${filteredIndices.length} mo.)` : "Total"}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
-                  {Math.round(d.totals.weight).toLocaleString()}
+                  {ft.shipments.toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
+                  {Math.round(ft.weight).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--accent)" }}>
-                  {fmtUSD(d.totals.totalProfit)}
+                  {fmtUSD(ft.totalProfit)}
                 </td>
               </tr>
             </tbody>
