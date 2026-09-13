@@ -123,6 +123,20 @@ const BU_SCHEMA: Record<string, BUSchema> = {
 // Must match month names used in _new sheets (mixed full/abbreviated)
 const MONTHS = ["April", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 
+// Map from BUData display months (e.g. "Apr") → _new tab month names
+const MONTH_NAME_MAP: Record<string, string> = {
+  "Apr": "April", "May": "May", "Jun": "June", "Jul": "July",
+  "Aug": "Aug", "Sep": "Sep", "Oct": "Oct", "Nov": "Nov",
+  "Dec": "Dec", "Jan": "Jan", "Feb": "Feb", "Mar": "Mar",
+};
+
+// FYE: Apr–Dec = 2025, Jan–Mar = 2026
+const MONTH_YEAR_MAP: Record<string, number> = {
+  "Apr": 2025, "May": 2025, "Jun": 2025, "Jul": 2025,
+  "Aug": 2025, "Sep": 2025, "Oct": 2025, "Nov": 2025, "Dec": 2025,
+  "Jan": 2026, "Feb": 2026, "Mar": 2026,
+};
+
 export default function BUDashboard({ buSheets }: Props) {
   const [selected, setSelected] = useState(0);
   const bu = buSheets[selected];
@@ -145,12 +159,12 @@ export default function BUDashboard({ buSheets }: Props) {
     weight: Math.round(d.weight[i]),
   }));
 
-  const openModal = (buEntry: BUEntry) => {
+  const openModal = (buEntry: BUEntry, prefillMonth?: string, prefillYear?: number) => {
     const schema = BU_SCHEMA[buEntry.name];
     if (!schema) return;
     setModalBU(buEntry);
-    setMonth("April");
-    setYear(new Date().getFullYear());
+    setMonth(prefillMonth ?? "April");
+    setYear(prefillYear ?? new Date().getFullYear());
     setFieldValues(schema.fields.map(() => ""));
     setSubmitError("");
     setSubmitSuccess(false);
@@ -352,9 +366,28 @@ export default function BUDashboard({ buSheets }: Props) {
               </tr>
             </thead>
             <tbody>
-              {d.months.map((m, i) => (
-                <tr key={m} style={{ borderTop: "1px solid var(--border)", background: i % 2 === 0 ? "var(--surface)" : "transparent" }}>
-                  <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>{m}</td>
+              {d.months.map((m, i) => {
+                const hasSchema = !!BU_SCHEMA[bu.name];
+                const tabMonth = MONTH_NAME_MAP[m] ?? m;
+                const tabYear = MONTH_YEAR_MAP[m] ?? new Date().getFullYear();
+                return (
+                <tr
+                  key={m}
+                  onClick={() => hasSchema && openModal(bu, tabMonth, tabYear)}
+                  style={{
+                    borderTop: "1px solid var(--border)",
+                    background: i % 2 === 0 ? "var(--surface)" : "transparent",
+                    cursor: hasSchema ? "pointer" : "default",
+                  }}
+                  title={hasSchema ? `Add entry for ${m}` : undefined}
+                  className={hasSchema ? "hover:opacity-80 transition-opacity" : ""}
+                >
+                  <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      {m}
+                      {hasSchema && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>+ add</span>}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
                     {d.shipments[i] ? d.shipments[i].toLocaleString() : "—"}
                   </td>
@@ -366,7 +399,8 @@ export default function BUDashboard({ buSheets }: Props) {
                     {d.totalProfit[i] ? fmtUSD(d.totalProfit[i]) : "—"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               <tr style={{ borderTop: "2px solid var(--accent)", background: "var(--surface2)" }}>
                 <td className="px-4 py-3 font-semibold" style={{ color: "var(--text)" }}>Total</td>
                 <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text)" }}>
