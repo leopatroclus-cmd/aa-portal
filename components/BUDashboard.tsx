@@ -283,89 +283,6 @@ export default function BUDashboard({ buSheets }: Props) {
         </p>
       </div>
 
-      {/* All-BU KPI Overview */}
-      <div className="mb-8 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <div className="px-5 py-3" style={{ background: "var(--surface2)" }}>
-          <h3 className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Business Units — FY Overview</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ background: "var(--surface2)" }}>
-                <th className="text-left px-4 py-2.5 font-medium text-xs" style={{ color: "var(--muted)", minWidth: "120px" }}>Metric</th>
-                {buSheets.map((b, i) => (
-                  <th
-                    key={b.name}
-                    className="text-right px-4 py-2.5 font-medium text-xs cursor-pointer transition-colors"
-                    onClick={() => setSelected(i)}
-                    style={{
-                      color: selected === i ? "var(--accent)" : "var(--muted)",
-                      borderBottom: selected === i ? "2px solid var(--accent)" : "2px solid transparent",
-                      minWidth: "120px",
-                    }}
-                  >
-                    {b.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Total Profit */}
-              <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
-                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Total Profit</td>
-                {buSheets.map((b) => (
-                  <td key={b.name} className="px-4 py-3 text-right font-semibold text-xs"
-                    style={{ color: b.data.totals.totalProfit > 0 ? "var(--accent)" : b.data.totals.totalProfit < 0 ? "#dc2626" : "var(--muted)" }}>
-                    {fmtUSD(b.data.totals.totalProfit)}
-                  </td>
-                ))}
-              </tr>
-              {/* Shipments */}
-              <tr style={{ borderTop: "1px solid var(--border)" }}>
-                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Shipments</td>
-                {buSheets.map((b) => (
-                  <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
-                    {b.data.totals.shipments ? b.data.totals.shipments.toLocaleString() : "—"}
-                  </td>
-                ))}
-              </tr>
-              {/* Weight */}
-              <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
-                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Weight (kg)</td>
-                {buSheets.map((b) => (
-                  <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
-                    {b.data.totals.weight ? Math.round(b.data.totals.weight).toLocaleString() : "—"}
-                  </td>
-                ))}
-              </tr>
-              {/* Staff */}
-              <tr style={{ borderTop: "1px solid var(--border)" }}>
-                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Staff</td>
-                {buSheets.map((b) => (
-                  <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
-                    {b.data.staff || "—"}
-                  </td>
-                ))}
-              </tr>
-              {/* Profit per Shipment */}
-              <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
-                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Profit / Shipment</td>
-                {buSheets.map((b) => {
-                  const pps = b.data.totals.shipments > 0
-                    ? b.data.totals.totalProfit / b.data.totals.shipments
-                    : 0;
-                  return (
-                    <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
-                      {pps ? fmtUSD(pps) : "—"}
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       {/* BU Selector */}
       <div className="flex flex-wrap gap-2 mb-8">
         {buSheets.map((b, i) => (
@@ -404,11 +321,60 @@ export default function BUDashboard({ buSheets }: Props) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <KPICard label="Total Profit" value={fmtUSD(d.totals.totalProfit)} sub="FY combined" />
-        <KPICard label="Air Freight Shipments" value={fmt(d.totals.shipments)} sub="Total files" />
-        <KPICard label="Chargeable Weight" value={fmt(d.totals.weight, "") + " kg"} sub="Air freight" />
-        <KPICard label="Staff" value={String(d.staff || "—")} sub="incl. managers" />
+      <div className="space-y-4 mb-8">
+        {/* Row 1: Core */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KPICard label="Total Profit" value={fmtUSD(d.totals.totalProfit)} sub="All freight types" />
+          <KPICard label="Profit / Shipment" value={d.totals.profitPerShipment ? fmtUSD(d.totals.profitPerShipment) : "—"} sub="Air freight" />
+          <KPICard label="Staff" value={String(d.staff || "—")} sub="incl. managers" />
+          <KPICard label="Air Freight Shipments" value={fmt(d.totals.shipments)} sub="Total files" />
+        </div>
+
+        {/* Row 2: Air Freight */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Air Freight</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <KPICard label="Shipments" value={fmt(d.totals.shipments)} sub="Total files" />
+            <KPICard label="Chargeable Weight" value={fmt(d.totals.weight, "") + " kg"} sub="Air freight" />
+            <KPICard label="Profit (USD)" value={fmtUSD(d.totals.profit)} sub="Air freight" />
+          </div>
+        </div>
+
+        {/* Row 3: Solution (if any) */}
+        {d.totals.solutionShipments > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Solution</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <KPICard label="Shipments" value={fmt(d.totals.solutionShipments)} sub="Solution files" />
+              <KPICard label="Chargeable Weight" value={fmt(d.totals.solutionWeight, "") + " kg"} sub="Solution" />
+              <KPICard label="Profit (USD)" value={fmtUSD(d.totals.solutionProfit)} sub="Solution" />
+            </div>
+          </div>
+        )}
+
+        {/* Row 4: Ocean Freight — INT only */}
+        {d.totals.oceanShipments > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Ocean Freight</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <KPICard label="Shipments" value={fmt(d.totals.oceanShipments)} sub="Ocean files" />
+              <KPICard label="Weight (CBM)" value={fmt(d.totals.oceanWeight, "") + " CBM"} sub="Ocean" />
+              <KPICard label="Profit (USD)" value={fmtUSD(d.totals.oceanProfit)} sub="Ocean" />
+            </div>
+          </div>
+        )}
+
+        {/* Row 5: Gulf Air — EA / Consolidated only */}
+        {d.totals.gulfShipments > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--muted)" }}>Gulf Air</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <KPICard label="Shipments / AWBs" value={fmt(d.totals.gulfShipments)} sub="Gulf Air" />
+              <KPICard label="Chargeable Weight" value={fmt(d.totals.gulfWeight, "") + " kg"} sub="Gulf Air" />
+              <KPICard label="Profit (USD)" value={fmtUSD(d.totals.gulfProfit)} sub="Gulf Air" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Charts */}

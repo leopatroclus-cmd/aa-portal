@@ -75,48 +75,41 @@ export interface BUData {
     weight: number;
     profit: number;
     totalProfit: number;
+    // Solution
+    solutionShipments: number;
+    solutionWeight: number;
+    solutionProfit: number;
+    // Ocean freight (INT only, 0 for others)
+    oceanShipments: number;
+    oceanWeight: number;
+    oceanProfit: number;
+    // Gulf Air (EA / Consolidated only, 0 for others)
+    gulfShipments: number;
+    gulfWeight: number;
+    gulfProfit: number;
+    // Derived
+    profitPerShipment: number;
   };
 }
 
 export async function fetchBUData(sheetName: string): Promise<BUData> {
   const rows = await fetchRange(BU_SHEET_ID, `'${sheetName}'!A1:O60`);
 
-  function findRow(label: string, startAfter?: number): string[] | undefined {
-    const start = startAfter ?? 0;
-    for (let i = start; i < rows.length; i++) {
-      if (rows[i][0]?.toLowerCase().includes(label.toLowerCase())) return rows[i];
+  // Returns [row, rowIndex] or [undefined, -1]
+  function findRowWithIdx(label: string, startAfter = 0): [string[] | undefined, number] {
+    for (let i = startAfter; i < rows.length; i++) {
+      if (rows[i]?.[0]?.toLowerCase().includes(label.toLowerCase())) {
+        return [rows[i], i];
+      }
     }
-    return undefined;
+    return [undefined, -1];
   }
-
-  const shipmentsRow = findRow("Total # of airfreight");
-  const weightRow = findRow("Total chargeable weight");
-  const profitRow = findRow("Total file profit (USD)");
-  const staffRow = findRow("Number of staff");
-  const totalProfitRow = findRow("Total file profit", 0);
-
-  // find the actual "Total file profit" row (not "Total file profit (USD)")
-  const totalFileProfitRow = (() => {
-    for (const row of rows) {
-      if (row[0]?.trim() === "Total file profit") return row;
-    }
-    return totalProfitRow;
-  })();
 
   const extract = (row: string[] | undefined) =>
     MONTHS.map((_, i) => parseNum(row?.[i + 1]));
 
-  const shipments = extract(shipmentsRow);
-  const weight = extract(weightRow);
-  const profit = extract(profitRow);
-  const totalProfit = extract(totalFileProfitRow);
-
-  const staffVal = staffRow ? parseNum(staffRow[staffRow.length - 1]) || parseNum(staffRow[1]) : 0;
-
-  // Use last column as total (index 13 = column N)
   const getTotalCol = (row: string[] | undefined) => {
     if (!row) return 0;
-    // last non-empty value
     for (let i = row.length - 1; i >= 1; i--) {
       const v = parseNum(row[i]);
       if (v !== 0) return v;
@@ -124,19 +117,65 @@ export async function fetchBUData(sheetName: string): Promise<BUData> {
     return 0;
   };
 
+  // ── Airfreight ──────────────────────────────────────────────────
+  const [shipmentsRow] = findRowWithIdx("Total # of airfreight");
+  const [weightRow, weightIdx] = findRowWithIdx("Total chargeable weight");
+  const [profitRow, profitIdx] = findRowWithIdx("Total file profit (USD)");
+
+  // ── Solution ────────────────────────────────────────────────────
+  const [solutionShipmentsRow] = findRowWithIdx("Total # of solution");
+  const [solutionWeightRow] = findRowWithIdx("Total chargeable weight", weightIdx + 1);
+  const [solutionProfitRow, solutionProfitIdx] = findRowWithIdx("Total file profit (USD)", profitIdx + 1);
+
+  // ── Ocean / Gulf Air (3rd profit occurrence) ────────────────────
+  const [thirdProfitRow] = findRowWithIdx("Total file profit (USD)", solutionProfitIdx + 1);
+
+  // Ocean freight shipments (AAINT)
+  const [oceanShipmentsRow] = findRowWithIdx("Total # of ocean freight");
+  // Gulf Air shipments (AAEA / Consolidated)
+  const [gulfShipmentsRow] = findRowWithIdx("Gulf Air");
+
+  // 3rd chargeable weight = ocean weight (INT) or gulf weight (EA)
+  const [thirdWeightRow] = findRowWithIdx("Total chargeable weight", (solutionWeightRow ? rows.indexOf(solutionWeightRow) : weightIdx) + 1);
+
+  // ── Staff ───────────────────────────────────────────────────────
+  const [staffRow] = findRowWithIdx("Number of staff");
+
+  // ── Total file profit (the non-USD summary row) ─────────────────
+  const totalFileProfitRow = rows.find((r) => r[0]?.trim() === "Total file profit") ?? profitRow;
+
+  const staffVal = staffRow ? parseNum(staffRow[staffRow.length - 1]) || parseNum(staffRow[1]) : 0;
+
+  const airfreightShipmentsTotal = getTotalCol(shipmentsRow);
+  const totalProfitVal = getTotalCol(totalFileProfitRow);
+
   return {
     months: MONTHS,
-    shipments,
-    solutionShipments: extract(findRow("Total # of solution")),
-    weight,
-    profit,
-    totalProfit,
+    shipments: extract(shipmentsRow),
+    solutionShipments: extract(solutionShipmentsRow),
+    weight: extract(weightRow),
+    profit: extract(profitRow),
+    totalProfit: extract(totalFileProfitRow),
     staff: staffVal,
     totals: {
-      shipments: getTotalCol(shipmentsRow),
+      shipments: airfreightShipmentsTotal,
       weight: getTotalCol(weightRow),
       profit: getTotalCol(profitRow),
-      totalProfit: getTotalCol(totalFileProfitRow),
+      totalProfit: totalProfitVal,
+      // Solution
+      solutionShipments: getTotalCol(solutionShipmentsRow),
+      solutionWeight: getTotalCol(solutionWeightRow),
+      solutionProfit: getTotalCol(solutionProfitRow),
+      // Ocean (INT) — only present if ocean row found
+      oceanShipments: getTotalCol(oceanShipmentsRow),
+      oceanWeight: oceanShipmentsRow ? getTotalCol(thirdWeightRow) : 0,
+      oceanProfit: oceanShipmentsRow ? getTotalCol(thirdProfitRow) : 0,
+      // Gulf Air (EA) — only present if gulf row found
+      gulfShipments: gulfShipmentsRow ? getTotalCol(gulfShipmentsRow) : 0,
+      gulfWeight: gulfShipmentsRow && !oceanShipmentsRow ? getTotalCol(thirdWeightRow) : 0,
+      gulfProfit: gulfShipmentsRow && !oceanShipmentsRow ? getTotalCol(thirdProfitRow) : 0,
+      // Derived
+      profitPerShipment: airfreightShipmentsTotal > 0 ? totalProfitVal / airfreightShipmentsTotal : 0,
     },
   };
 }
