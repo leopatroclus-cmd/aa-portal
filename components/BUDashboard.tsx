@@ -4,7 +4,7 @@ import type { BUData } from "@/lib/sheets";
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer,
 } from "recharts";
 
 interface BUEntry {
@@ -27,10 +27,132 @@ function fmtUSD(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
+// Map BU name → _new tab name and field schema
+interface FieldDef {
+  label: string;
+  group?: string; // section header
+}
+
+interface BUSchema {
+  newTab: string;
+  fields: FieldDef[];
+}
+
+const BU_SCHEMA: Record<string, BUSchema> = {
+  "CONSOLIDATED OPS": {
+    newTab: "CONSOLIDATED OPS_new",
+    fields: [
+      { label: "Airfreight Shipments", group: "Airfreight" },
+      { label: "Airfreight Weight (kg)" },
+      { label: "Airfreight Profit (USD)" },
+      { label: "Solution Shipments", group: "Solution" },
+      { label: "Solution Weight (kg)" },
+      { label: "Solution Profit (USD)" },
+      { label: "Ocean Shipments (INT)", group: "Ocean Freight (INT)" },
+      { label: "Ocean Weight CBM (INT)" },
+      { label: "Ocean Profit USD (INT)" },
+      { label: "Gulf Air Shipments (EA)", group: "Gulf Air (EA)" },
+      { label: "Gulf Air Weight kg (EA)" },
+      { label: "Gulf Air Profit USD (EA)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+  "AASA": {
+    newTab: "AASA_new",
+    fields: [
+      { label: "Airfreight Shipments", group: "Airfreight" },
+      { label: "Airfreight Weight (kg)" },
+      { label: "Airfreight Profit (USD)" },
+      { label: "Solution Shipments", group: "Solution" },
+      { label: "Solution Weight (kg)" },
+      { label: "Solution Profit (USD)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+  "AAINT ": {
+    newTab: "AAINT_new",
+    fields: [
+      { label: "Export Shipments", group: "Airfreight Export" },
+      { label: "Export Weight (kg)" },
+      { label: "Export Profit (USD)" },
+      { label: "Import Shipments", group: "Airfreight Import" },
+      { label: "Import Weight (kg)" },
+      { label: "Import Profit (USD)" },
+      { label: "Ocean Shipments", group: "Ocean Freight" },
+      { label: "Ocean Weight (CBM)" },
+      { label: "Ocean Profit (USD)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+  "AAEA": {
+    newTab: "AAEA_new",
+    fields: [
+      { label: "Airfreight Shipments", group: "Airfreight" },
+      { label: "Airfreight Weight (kg)" },
+      { label: "Airfreight Profit (USD)" },
+      { label: "Solution Shipments", group: "Solution" },
+      { label: "Solution Weight (kg)" },
+      { label: "Solution Profit (USD)" },
+      { label: "Gulf Air Shipments", group: "Gulf Air" },
+      { label: "Gulf Air Weight (kg)" },
+      { label: "Gulf Air Profit (USD)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+  "AAWN": {
+    newTab: "AAWN_new",
+    fields: [
+      { label: "Airfreight Shipments", group: "Airfreight" },
+      { label: "Airfreight Weight (kg)" },
+      { label: "Airfreight Profit (USD)" },
+      { label: "Solution Shipments", group: "Solution" },
+      { label: "Solution Weight (kg)" },
+      { label: "Solution Profit (USD)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+  "AACN ": {
+    newTab: "AACN_new",
+    fields: [
+      { label: "Airfreight Shipments", group: "Airfreight" },
+      { label: "Airfreight Weight (kg)" },
+      { label: "Airfreight Profit (USD)" },
+      { label: "Solution Shipments", group: "Solution" },
+      { label: "Solution Weight (kg)" },
+      { label: "Solution Profit (USD)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+  "AAMA ": {
+    newTab: "AAMA_new",
+    fields: [
+      { label: "Airfreight Shipments", group: "Airfreight" },
+      { label: "Airfreight Weight (kg)" },
+      { label: "Airfreight Profit (USD)" },
+      { label: "Solution Shipments", group: "Solution" },
+      { label: "Solution Weight (kg)" },
+      { label: "Solution Profit (USD)" },
+      { label: "Staff", group: "General" },
+    ],
+  },
+};
+
+const MONTHS = ["April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"];
+
 export default function BUDashboard({ buSheets }: Props) {
   const [selected, setSelected] = useState(0);
   const bu = buSheets[selected];
   const d = bu.data;
+
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [modalBU, setModalBU] = useState<BUEntry | null>(null);
+  const [month, setMonth] = useState("April");
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [fieldValues, setFieldValues] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const chartData = d.months.map((m, i) => ({
     month: m,
@@ -38,6 +160,95 @@ export default function BUDashboard({ buSheets }: Props) {
     shipments: d.shipments[i],
     weight: Math.round(d.weight[i]),
   }));
+
+  const openModal = (buEntry: BUEntry) => {
+    const schema = BU_SCHEMA[buEntry.name];
+    if (!schema) return;
+    setModalBU(buEntry);
+    setMonth("April");
+    setYear(new Date().getFullYear());
+    setFieldValues(schema.fields.map(() => ""));
+    setSubmitError("");
+    setSubmitSuccess(false);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    if (submitting) return;
+    setShowModal(false);
+    setSubmitError("");
+    setSubmitSuccess(false);
+  };
+
+  const updateField = (i: number, val: string) => {
+    setFieldValues((prev) => {
+      const next = [...prev];
+      next[i] = val;
+      return next;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!modalBU) return;
+    const schema = BU_SCHEMA[modalBU.name];
+    if (!schema) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+
+    try {
+      const res = await fetch("/api/bu-entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tab: schema.newTab,
+          month,
+          year,
+          fields: fieldValues,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSubmitError(data.error || "Something went wrong.");
+        return;
+      }
+
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        setShowModal(false);
+        setSubmitSuccess(false);
+      }, 2000);
+    } catch {
+      setSubmitError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--surface2)",
+    border: "1px solid var(--border)",
+    color: "var(--text)",
+    borderRadius: "0.5rem",
+    padding: "0.45rem 0.75rem",
+    width: "100%",
+    fontSize: "0.875rem",
+    outline: "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: "0.72rem",
+    fontWeight: 500,
+    color: "var(--muted)",
+    marginBottom: "0.2rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  };
+
+  const schema = modalBU ? BU_SCHEMA[modalBU.name] : null;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -54,19 +265,37 @@ export default function BUDashboard({ buSheets }: Props) {
       {/* BU Selector */}
       <div className="flex flex-wrap gap-2 mb-8">
         {buSheets.map((b, i) => (
-          <button
-            key={b.name}
-            onClick={() => setSelected(i)}
-            className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            style={{
-              background: selected === i ? "var(--accent)" : "var(--surface2)",
-              color: selected === i ? "#fff" : "var(--text)",
-              border: "1px solid",
-              borderColor: selected === i ? "var(--accent)" : "var(--border)",
-            }}
-          >
-            {b.label}
-          </button>
+          <div key={b.name} className="flex items-center gap-1">
+            <button
+              onClick={() => setSelected(i)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{
+                background: selected === i ? "var(--accent)" : "var(--surface2)",
+                color: selected === i ? "#fff" : "var(--text)",
+                border: "1px solid",
+                borderColor: selected === i ? "var(--accent)" : "var(--border)",
+              }}
+            >
+              {b.label}
+            </button>
+            {BU_SCHEMA[b.name] && (
+              <button
+                onClick={() => openModal(b)}
+                title={`Add entry for ${b.label}`}
+                className="flex items-center justify-center rounded-lg text-xs font-bold transition-colors"
+                style={{
+                  width: "28px",
+                  height: "36px",
+                  background: "var(--surface2)",
+                  color: "var(--accent)",
+                  border: "1px solid var(--border)",
+                  cursor: "pointer",
+                }}
+              >
+                +
+              </button>
+            )}
+          </div>
         ))}
       </div>
 
@@ -80,7 +309,6 @@ export default function BUDashboard({ buSheets }: Props) {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Monthly Profit Bar Chart */}
         <div className="p-5 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--muted)" }}>
             Monthly Total Profit (USD)
@@ -89,14 +317,9 @@ export default function BUDashboard({ buSheets }: Props) {
             <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis
-                tick={{ fill: "var(--muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => fmt(v, "$")}
-              />
+              <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v, "$")} />
               <Tooltip
-                contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8 }}
                 labelStyle={{ color: "var(--text)", fontWeight: 600 }}
                 formatter={(v) => [fmtUSD(Number(v)), "Profit"]}
               />
@@ -105,7 +328,6 @@ export default function BUDashboard({ buSheets }: Props) {
           </ResponsiveContainer>
         </div>
 
-        {/* Monthly Shipments Line Chart */}
         <div className="p-5 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--muted)" }}>
             Monthly Shipments
@@ -114,25 +336,15 @@ export default function BUDashboard({ buSheets }: Props) {
             <LineChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis
-                tick={{ fill: "var(--muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => fmt(v)}
-              />
+              <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v)} />
               <Tooltip
-                contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8 }}
                 labelStyle={{ color: "var(--text)", fontWeight: 600 }}
                 formatter={(v) => [Number(v).toLocaleString(), "Shipments"]}
               />
-              <Line
-                type="monotone"
-                dataKey="shipments"
-                stroke="var(--accent)"
-                strokeWidth={2.5}
+              <Line type="monotone" dataKey="shipments" stroke="var(--accent)" strokeWidth={2.5}
                 dot={{ fill: "var(--accent)", r: 3, strokeWidth: 0 }}
-                activeDot={{ r: 5, strokeWidth: 0 }}
-              />
+                activeDot={{ r: 5, strokeWidth: 0 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -157,13 +369,7 @@ export default function BUDashboard({ buSheets }: Props) {
             </thead>
             <tbody>
               {d.months.map((m, i) => (
-                <tr
-                  key={m}
-                  style={{
-                    borderTop: "1px solid var(--border)",
-                    background: i % 2 === 0 ? "var(--surface)" : "transparent",
-                  }}
-                >
+                <tr key={m} style={{ borderTop: "1px solid var(--border)", background: i % 2 === 0 ? "var(--surface)" : "transparent" }}>
                   <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>{m}</td>
                   <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
                     {d.shipments[i] ? d.shipments[i].toLocaleString() : "—"}
@@ -171,7 +377,8 @@ export default function BUDashboard({ buSheets }: Props) {
                   <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
                     {d.weight[i] ? Math.round(d.weight[i]).toLocaleString() : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-medium" style={{ color: d.totalProfit[i] > 0 ? "var(--accent)" : d.totalProfit[i] < 0 ? "#dc2626" : "var(--muted)" }}>
+                  <td className="px-4 py-2.5 text-right font-medium"
+                    style={{ color: d.totalProfit[i] > 0 ? "var(--accent)" : d.totalProfit[i] < 0 ? "#dc2626" : "var(--muted)" }}>
                     {d.totalProfit[i] ? fmtUSD(d.totalProfit[i]) : "—"}
                   </td>
                 </tr>
@@ -192,25 +399,149 @@ export default function BUDashboard({ buSheets }: Props) {
           </table>
         </div>
       </div>
+
+      {/* Add Entry Modal */}
+      {showModal && modalBU && schema && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-[60] p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl shadow-2xl overflow-hidden"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+              <div>
+                <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>Add Entry</h2>
+                <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{modalBU.label}</p>
+              </div>
+              <button onClick={closeModal} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "1.25rem" }}>✕</button>
+            </div>
+
+            {submitSuccess ? (
+              <div className="px-6 py-12 text-center">
+                <div className="text-3xl mb-3">✅</div>
+                <p className="font-semibold" style={{ color: "var(--text)" }}>Entry added!</p>
+                <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Refresh to see changes.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+                {/* Month + Year */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label style={labelStyle}>Month</label>
+                    <select value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle}>
+                      {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Year</label>
+                    <input
+                      type="number"
+                      value={year}
+                      onChange={(e) => setYear(Number(e.target.value))}
+                      min={2020}
+                      max={2099}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                {/* Dynamic fields grouped by section */}
+                {(() => {
+                  const elements: React.ReactNode[] = [];
+                  let currentGroup = "";
+                  const groupFields: { def: FieldDef; idx: number }[] = [];
+
+                  const flushGroup = () => {
+                    if (groupFields.length === 0) return;
+                    const cols = groupFields.length === 1 ? "grid-cols-1" : groupFields.length === 2 ? "grid-cols-2" : "grid-cols-3";
+                    elements.push(
+                      <div key={currentGroup}>
+                        {currentGroup && (
+                          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "4px" }}>
+                            {currentGroup}
+                          </div>
+                        )}
+                        <div className={`grid ${cols} gap-3`}>
+                          {groupFields.map(({ def, idx }) => (
+                            <div key={idx}>
+                              <label style={labelStyle}>{def.label}</label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={fieldValues[idx]}
+                                onChange={(e) => updateField(idx, e.target.value)}
+                                placeholder="0"
+                                style={inputStyle}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                    groupFields.length = 0;
+                  };
+
+                  schema.fields.forEach((def, idx) => {
+                    if (def.group && def.group !== currentGroup) {
+                      flushGroup();
+                      currentGroup = def.group;
+                    }
+                    groupFields.push({ def, idx });
+                  });
+                  flushGroup();
+
+                  return elements;
+                })()}
+
+                {submitError && (
+                  <p className="text-sm" style={{ color: "#dc2626" }}>{submitError}</p>
+                )}
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    style={{
+                      background: submitting ? "var(--muted)" : "var(--accent)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "0.5rem",
+                      padding: "0.625rem",
+                      fontWeight: 600,
+                      fontSize: "0.875rem",
+                      cursor: submitting ? "not-allowed" : "pointer",
+                      width: "100%",
+                    }}
+                  >
+                    {submitting ? "Saving…" : "Save Entry"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "0.875rem", padding: "0.375rem" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function KPICard({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div
-      className="p-5 rounded-xl"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-    >
-      <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--muted)" }}>
-        {label}
-      </div>
-      <div className="text-2xl font-bold mb-0.5" style={{ color: "var(--text)" }}>
-        {value}
-      </div>
-      <div className="text-xs" style={{ color: "var(--muted)" }}>
-        {sub}
-      </div>
+    <div className="p-5 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+      <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--muted)" }}>{label}</div>
+      <div className="text-2xl font-bold mb-0.5" style={{ color: "var(--text)" }}>{value}</div>
+      <div className="text-xs" style={{ color: "var(--muted)" }}>{sub}</div>
     </div>
   );
 }
