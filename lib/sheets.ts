@@ -49,7 +49,7 @@ export const BU_SHEETS: BUSheet[] = [
   { name: "AAINT ", label: "International" },
   { name: "AAEA", label: "East Africa" },
   { name: "AAWN", label: "West Nigeria" },
-  { name: "AACN ", label: "Central Nigeria" },
+  { name: "AACN ", label: "China" },
   { name: "AAMA ", label: "Morocco" },
 ];
 
