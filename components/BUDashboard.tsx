@@ -120,7 +120,8 @@ const BU_SCHEMA: Record<string, BUSchema> = {
   },
 };
 
-const MONTHS = ["April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"];
+// Must match month names used in _new sheets (mixed full/abbreviated)
+const MONTHS = ["April", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 
 export default function BUDashboard({ buSheets }: Props) {
   const [selected, setSelected] = useState(0);
