@@ -56,7 +56,7 @@ export const BU_SHEETS: BUSheet[] = [
   { name: "AASA",             newTab: "AASA_new",             label: "South Africa",   type: "standard"      },
   { name: "AAINT ",           newTab: "AAINT_new",            label: "International",  type: "international" },
   { name: "AAEA",             newTab: "AAEA_new",             label: "East Africa",    type: "east-africa"   },
-  { name: "AAWN",             newTab: "AAWN_new",             label: "West Nigeria",   type: "standard"      },
+  { name: "AAWN",             newTab: "AAWN_new",             label: "West Africa",    type: "standard"      },
   { name: "AACN ",            newTab: "AACN_new",             label: "China",          type: "standard"      },
   { name: "AAMA ",            newTab: "AAMA_new",             label: "Morocco",        type: "standard"      },
 ];
