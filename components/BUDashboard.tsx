@@ -283,6 +283,89 @@ export default function BUDashboard({ buSheets }: Props) {
         </p>
       </div>
 
+      {/* All-BU KPI Overview */}
+      <div className="mb-8 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+        <div className="px-5 py-3" style={{ background: "var(--surface2)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Business Units — FY Overview</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: "var(--surface2)" }}>
+                <th className="text-left px-4 py-2.5 font-medium text-xs" style={{ color: "var(--muted)", minWidth: "120px" }}>Metric</th>
+                {buSheets.map((b, i) => (
+                  <th
+                    key={b.name}
+                    className="text-right px-4 py-2.5 font-medium text-xs cursor-pointer transition-colors"
+                    onClick={() => setSelected(i)}
+                    style={{
+                      color: selected === i ? "var(--accent)" : "var(--muted)",
+                      borderBottom: selected === i ? "2px solid var(--accent)" : "2px solid transparent",
+                      minWidth: "120px",
+                    }}
+                  >
+                    {b.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Total Profit */}
+              <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
+                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Total Profit</td>
+                {buSheets.map((b) => (
+                  <td key={b.name} className="px-4 py-3 text-right font-semibold text-xs"
+                    style={{ color: b.data.totals.totalProfit > 0 ? "var(--accent)" : b.data.totals.totalProfit < 0 ? "#dc2626" : "var(--muted)" }}>
+                    {fmtUSD(b.data.totals.totalProfit)}
+                  </td>
+                ))}
+              </tr>
+              {/* Shipments */}
+              <tr style={{ borderTop: "1px solid var(--border)" }}>
+                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Shipments</td>
+                {buSheets.map((b) => (
+                  <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
+                    {b.data.totals.shipments ? b.data.totals.shipments.toLocaleString() : "—"}
+                  </td>
+                ))}
+              </tr>
+              {/* Weight */}
+              <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
+                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Weight (kg)</td>
+                {buSheets.map((b) => (
+                  <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
+                    {b.data.totals.weight ? Math.round(b.data.totals.weight).toLocaleString() : "—"}
+                  </td>
+                ))}
+              </tr>
+              {/* Staff */}
+              <tr style={{ borderTop: "1px solid var(--border)" }}>
+                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Staff</td>
+                {buSheets.map((b) => (
+                  <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
+                    {b.data.staff || "—"}
+                  </td>
+                ))}
+              </tr>
+              {/* Profit per Shipment */}
+              <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
+                <td className="px-4 py-3 text-xs font-medium" style={{ color: "var(--muted)" }}>Profit / Shipment</td>
+                {buSheets.map((b) => {
+                  const pps = b.data.totals.shipments > 0
+                    ? b.data.totals.totalProfit / b.data.totals.shipments
+                    : 0;
+                  return (
+                    <td key={b.name} className="px-4 py-3 text-right text-xs" style={{ color: "var(--text)" }}>
+                      {pps ? fmtUSD(pps) : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* BU Selector */}
       <div className="flex flex-wrap gap-2 mb-8">
         {buSheets.map((b, i) => (
