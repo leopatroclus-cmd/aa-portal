@@ -38,25 +38,8 @@ interface BUSchema {
   fields: FieldDef[];
 }
 
+// "CONSOLIDATED OPS" is excluded — it's an aggregation, not a data-entry BU
 const BU_SCHEMA: Record<string, BUSchema> = {
-  "CONSOLIDATED OPS": {
-    newTab: "CONSOLIDATED OPS_new",
-    fields: [
-      { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" },
-      { label: "Airfreight Profit (USD)" },
-      { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" },
-      { label: "Solution Profit (USD)" },
-      { label: "Ocean Shipments (INT)", group: "Ocean Freight (INT)" },
-      { label: "Ocean Weight CBM (INT)" },
-      { label: "Ocean Profit USD (INT)" },
-      { label: "Gulf Air Shipments (EA)", group: "Gulf Air (EA)" },
-      { label: "Gulf Air Weight kg (EA)" },
-      { label: "Gulf Air Profit USD (EA)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
   "AASA": {
     newTab: "AASA_new",
     fields: [
