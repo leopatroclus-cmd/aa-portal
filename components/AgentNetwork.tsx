@@ -35,6 +35,9 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
   const [tab, setTab] = useState<Tab>("Global");
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
+  const [network, setNetwork] = useState("");
+  const [company, setCompany] = useState("");
+  const [contactManager, setContactManager] = useState("");
   const [primaryOnly, setPrimaryOnly] = useState(false);
 
   // Modal state
@@ -47,33 +50,50 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
   const agents = tab === "Global" ? globalAgents : africaAgents;
 
   const countries = useMemo(
-    () => Array.from(new Set(agents.map((a) => a.country))).sort(),
+    () => Array.from(new Set(agents.map((a) => a.country).filter(Boolean))).sort(),
     [agents]
   );
   const cities = useMemo(
     () =>
       Array.from(
-        new Set(agents.filter((a) => !country || a.country === country).map((a) => a.city))
+        new Set(
+          agents
+            .filter((a) => !country || a.country === country)
+            .map((a) => a.city)
+            .filter(Boolean)
+        )
       ).sort(),
     [agents, country]
   );
-
-  const filtered = useMemo(
-    () =>
-      agents.filter(
-        (a) =>
-          (!country || a.country === country) &&
-          (!city || a.city === city) &&
-          (!primaryOnly || a.isPrimary)
-      ),
-    [agents, country, city, primaryOnly]
+  const networks = useMemo(
+    () => Array.from(new Set(agents.map((a) => a.network).filter(Boolean))).sort(),
+    [agents]
   );
+
+  const filtered = useMemo(() => {
+    const companyQ = company.toLowerCase().trim();
+    const managerQ = contactManager.toLowerCase().trim();
+    return agents.filter(
+      (a) =>
+        (!country       || a.country === country) &&
+        (!city          || a.city === city) &&
+        (!network       || a.network === network) &&
+        (!companyQ      || a.company.toLowerCase().includes(companyQ)) &&
+        (!managerQ      || a.contactManager.toLowerCase().includes(managerQ)) &&
+        (!primaryOnly   || a.isPrimary)
+    );
+  }, [agents, country, city, network, company, contactManager, primaryOnly]);
+
+  const hasFilters = !!(country || city || network || company || contactManager || primaryOnly);
+
+  const resetFilters = () => {
+    setCountry(""); setCity(""); setNetwork("");
+    setCompany(""); setContactManager(""); setPrimaryOnly(false);
+  };
 
   const handleTabChange = (t: Tab) => {
     setTab(t);
-    setCountry("");
-    setCity("");
-    setPrimaryOnly(false);
+    resetFilters();
   };
 
   const openModal = () => {
@@ -213,39 +233,81 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        <select
-          value={country}
-          onChange={(e) => { setCountry(e.target.value); setCity(""); }}
-          className="px-3 py-2 rounded-lg text-sm outline-none"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
-        >
-          <option value="">All Countries</option>
-          {countries.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+      <div className="rounded-xl p-4 mb-6 space-y-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+        {/* Row 1: Location */}
+        <div className="flex flex-wrap gap-3">
+          <select
+            value={country}
+            onChange={(e) => { setCountry(e.target.value); setCity(""); }}
+            className="px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            <option value="">All Countries</option>
+            {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
 
-        <select
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm outline-none"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
-        >
-          <option value="">All Cities</option>
-          {cities.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+          <select
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            <option value="">All Cities</option>
+            {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
 
-        <label
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: primaryOnly ? "var(--accent)" : "var(--muted)" }}
-        >
+          <select
+            value={network}
+            onChange={(e) => setNetwork(e.target.value)}
+            className="px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            <option value="">All Networks</option>
+            {networks.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+
+        {/* Row 2: Text search + Primary */}
+        <div className="flex flex-wrap gap-3 items-center">
           <input
-            type="checkbox"
-            checked={primaryOnly}
-            onChange={(e) => setPrimaryOnly(e.target.checked)}
-            className="accent-blue-500"
+            type="text"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Search company…"
+            className="px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", minWidth: "180px" }}
           />
-          Primary agents only
-        </label>
+          <input
+            type="text"
+            value={contactManager}
+            onChange={(e) => setContactManager(e.target.value)}
+            placeholder="Search contact manager…"
+            className="px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", minWidth: "200px" }}
+          />
+          <label
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: primaryOnly ? "var(--accent)" : "var(--muted)" }}
+          >
+            <input type="checkbox" checked={primaryOnly} onChange={(e) => setPrimaryOnly(e.target.checked)} className="accent-blue-500" />
+            Primary only
+          </label>
+
+          {hasFilters && (
+            <button
+              onClick={resetFilters}
+              className="px-3 py-2 rounded-lg text-sm"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)", cursor: "pointer" }}
+            >
+              Reset
+            </button>
+          )}
+
+          <span className="ml-auto text-xs" style={{ color: "var(--muted)" }}>
+            {filtered.length} agent{filtered.length !== 1 ? "s" : ""}
+            {hasFilters && " (filtered)"}
+          </span>
+        </div>
       </div>
 
       {/* Table */}
