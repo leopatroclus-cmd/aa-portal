@@ -14,6 +14,8 @@ async function fetchRange(sheetId: string, range: string): Promise<string[][]> {
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
 export interface Agent {
+  _sheetRow: number;          // 1-based row number in the sheet (for editing)
+  _tab: "Global" | "Africa";  // which sheet tab this agent lives in
   country: string;
   city: string;
   company: string;
@@ -26,8 +28,11 @@ export interface Agent {
 export async function fetchAgents(tab: "Global" | "Africa"): Promise<Agent[]> {
   const rows = await fetchRange(AGENT_SHEET_ID, `${tab}!A2:N2000`);
   return rows
-    .filter((r) => r[0]?.trim())
-    .map((r) => ({
+    .map((r, i) => ({ r, sheetRow: i + 2 })) // +2: row 1 is header, data starts at row 2
+    .filter(({ r }) => r[0]?.trim())
+    .map(({ r, sheetRow }) => ({
+      _sheetRow: sheetRow,
+      _tab: tab,
       country: r[0]?.trim() || "",
       city: r[1]?.trim() || "",
       company: r[2]?.trim() || "",
