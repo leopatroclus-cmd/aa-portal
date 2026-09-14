@@ -32,8 +32,10 @@ export async function POST(req: NextRequest) {
     });
     const sheets = google.sheets({ version: "v4", auth });
 
+    // Column order matches existing Reviews tab:
+    // A=Sheet | B=Country | C=City | D=CompanyName | E=Rating | F=ReviewerName | G=Comment | H=Timestamp
     const timestamp = new Date().toISOString();
-    const row = [timestamp, tab, country, city, company, rating, comment || "", reviewer || ""];
+    const row = [tab, country, city, company, rating, reviewer || "", comment || "", timestamp];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
