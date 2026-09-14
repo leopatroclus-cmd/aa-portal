@@ -281,7 +281,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
             type="text"
             value={contactManager}
             onChange={(e) => setContactManager(e.target.value)}
-            placeholder="Search contact manager…"
+            placeholder="Search affiliated entity…"
             className="px-3 py-2 rounded-lg text-sm outline-none"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", minWidth: "200px" }}
           />
@@ -496,7 +496,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                   />
                 </div>
 
-                {/* Network + Contact Manager */}
+                {/* Network + Affiliated Entity */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>Network</label>
@@ -509,7 +509,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Contact Manager</label>
+                    <label style={labelStyle}>Affiliated Entity</label>
                     <input
                       type="text"
                       value={form.contactManager}
