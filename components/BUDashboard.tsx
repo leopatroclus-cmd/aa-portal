@@ -282,7 +282,7 @@ export default function BUDashboard({ buSheets }: Props) {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Business Unit Report</h1>
@@ -427,7 +427,7 @@ export default function BUDashboard({ buSheets }: Props) {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
               <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v, "$")} />
               <Tooltip
                 contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8 }}
@@ -444,7 +444,7 @@ export default function BUDashboard({ buSheets }: Props) {
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
               <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v)} />
               <Tooltip
                 contentStyle={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8 }}
@@ -646,7 +646,7 @@ function KPICard({ label, value, sub }: { label: string; value: string; sub: str
   return (
     <div className="p-5 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
       <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: "var(--muted)" }}>{label}</div>
-      <div className="text-2xl font-bold mb-0.5" style={{ color: "var(--text)" }}>{value}</div>
+      <div className="text-xl sm:text-2xl font-bold mb-0.5 truncate" style={{ color: "var(--text)" }}>{value}</div>
       <div className="text-xs" style={{ color: "var(--muted)" }}>{sub}</div>
     </div>
   );
