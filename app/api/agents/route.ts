@@ -13,9 +13,9 @@ function getAuth(credsJson: string) {
 
 function buildRow(body: {
   country: string; city: string; company: string;
-  network?: string; contactManager?: string; isPrimary?: boolean; emails?: string[];
+  network?: string; contactManager?: string; isPrimary?: boolean; emails?: string[]; aaContact?: string;
 }) {
-  const { country, city, company, network, contactManager, isPrimary, emails = [] } = body;
+  const { country, city, company, network, contactManager, isPrimary, emails = [], aaContact = "" } = body;
   const emailCols = Array.from({ length: 8 }, (_, i) => emails[i] || "");
   return [
     country,
@@ -25,6 +25,7 @@ function buildRow(body: {
     contactManager || "",
     isPrimary ? "Primary Agent" : "",
     ...emailCols,
+    aaContact,
   ];
 }
 

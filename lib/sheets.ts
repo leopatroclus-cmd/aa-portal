@@ -23,10 +23,11 @@ export interface Agent {
   contactManager: string;
   isPrimary: boolean;
   emails: string[];
+  aaContact: string;
 }
 
 export async function fetchAgents(tab: "Global" | "Africa"): Promise<Agent[]> {
-  const rows = await fetchRange(AGENT_SHEET_ID, `${tab}!A2:N2000`);
+  const rows = await fetchRange(AGENT_SHEET_ID, `${tab}!A2:O2000`);
   return rows
     .map((r, i) => ({ r, sheetRow: i + 2 })) // +2: row 1 is header, data starts at row 2
     .filter(({ r }) => r[0]?.trim())
@@ -42,6 +43,7 @@ export async function fetchAgents(tab: "Global" | "Africa"): Promise<Agent[]> {
       emails: [r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13]]
         .filter(Boolean)
         .map((e) => e.trim()),
+      aaContact: r[14]?.trim() || "",
     }));
 }
 

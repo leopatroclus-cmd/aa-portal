@@ -17,6 +17,7 @@ interface FormData {
   company: string;
   network: string;
   contactManager: string;
+  aaContact: string;
   isPrimary: boolean;
   emails: string[];
 }
@@ -34,6 +35,7 @@ const emptyForm = (tab: Tab): FormData => ({
   company: "",
   network: "",
   contactManager: "",
+  aaContact: "",
   isPrimary: false,
   emails: [""],
 });
@@ -131,6 +133,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
       company: agent.company,
       network: agent.network,
       contactManager: agent.contactManager,
+      aaContact: agent.aaContact,
       isPrimary: agent.isPrimary,
       emails: agent.emails.length > 0 ? agent.emails : [""],
     });
@@ -440,6 +443,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
               <th className="text-left px-4 py-3 font-medium">Network</th>
               <th className="text-left px-4 py-3 font-medium">Status</th>
               <th className="text-left px-4 py-3 font-medium">Contact</th>
+              <th className="text-left px-4 py-3 font-medium">AA Contact</th>
               <th className="px-4 py-3 font-medium" style={{ width: "80px" }}></th>
             </tr>
           </thead>
@@ -500,6 +504,9 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                     )}
                   </div>
                 </td>
+                <td className="px-4 py-3" style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                  {agent.aaContact || "—"}
+                </td>
                 {/* Actions */}
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5 justify-end">
@@ -527,7 +534,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center py-12" style={{ color: "var(--muted)" }}>
+                <td colSpan={8} className="text-center py-12" style={{ color: "var(--muted)" }}>
                   No agents found
                 </td>
               </tr>
@@ -624,7 +631,7 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                   />
                 </div>
 
-                {/* Network + Affiliated Entity */}
+                {/* Network + Affiliated Entity + AA Contact */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>Network</label>
@@ -642,6 +649,15 @@ export default function AgentNetwork({ globalAgents, africaAgents }: Props) {
                       placeholder="Name" style={inputStyle}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>AA Contact</label>
+                  <input
+                    type="text" value={form.aaContact}
+                    onChange={(e) => setForm((f) => ({ ...f, aaContact: e.target.value }))}
+                    placeholder="AA contact person" style={inputStyle}
+                  />
                 </div>
 
                 <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
