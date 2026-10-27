@@ -51,88 +51,545 @@ function sortKey(month: string, year: number) {
   return year * 100 + (MONTH_TO_CAL[month] ?? 0);
 }
 
-// ─── Add/Edit BU Schema (for entry modal) ────────────────────────────────────
-
-interface FieldDef { label: string; group?: string }
-interface BUSchema  { newTab: string; fields: FieldDef[] }
-
-const BU_SCHEMA: Record<string, BUSchema> = {
-  "AASA": {
-    newTab: "AASA_new",
-    fields: [
-      { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
-      { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
-  "AAINT ": {
-    newTab: "AAINT_new",
-    fields: [
-      { label: "Export Shipments", group: "Airfreight Export" },
-      { label: "Export Weight (kg)" }, { label: "Export Profit (USD)" },
-      { label: "Import Shipments", group: "Airfreight Import" },
-      { label: "Import Weight (kg)" }, { label: "Import Profit (USD)" },
-      { label: "Ocean Shipments", group: "Ocean Freight" },
-      { label: "Ocean Weight (CBM)" }, { label: "Ocean Profit (USD)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
-  "AAEA": {
-    newTab: "AAEA_new",
-    fields: [
-      { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
-      { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
-      { label: "Gulf Air Shipments", group: "Gulf Air" },
-      { label: "Gulf Air Weight (kg)" }, { label: "Gulf Air Profit (USD)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
-  "AAWN": {
-    newTab: "AAWN_new",
-    fields: [
-      { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
-      { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
-  "AACN ": {
-    newTab: "AACN_new",
-    fields: [
-      { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
-      { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
-  "AAMA ": {
-    newTab: "AAMA_new",
-    fields: [
-      { label: "Airfreight Shipments", group: "Airfreight" },
-      { label: "Airfreight Weight (kg)" }, { label: "Airfreight Profit (USD)" },
-      { label: "Solution Shipments", group: "Solution" },
-      { label: "Solution Weight (kg)" }, { label: "Solution Profit (USD)" },
-      { label: "Staff", group: "General" },
-    ],
-  },
-};
-
 const MONTH_NAME_MAP: Record<string, string> = {
   "Apr":"April","May":"May","Jun":"June","Jul":"July",
   "Aug":"Aug","Sep":"Sep","Oct":"Oct","Nov":"Nov",
   "Dec":"Dec","Jan":"Jan","Feb":"Feb","Mar":"Mar",
 };
 
+// ─── Entry Form State ─────────────────────────────────────────────────────────
+
+// Flat field order (maps to spreadsheet columns C onwards):
+// [0]  exportAF_shipments
+// [1]  exportAF_ownSales
+// [2]  exportAF_routedAgents
+// [3]  exportAF_weight
+// [4]  exportAF_profit
+// [5]  importAF_shipments
+// [6]  importAF_ownSales
+// [7]  importAF_routedAgents
+// [8]  importAF_weight
+// [9]  importAF_profit
+// [10] gsa_shipments
+// [11] gsa_weight
+// [12] gsa_profit
+// [13] exportFCL_shipments
+// [14] exportFCL_ownSales
+// [15] exportFCL_routedAgents
+// [16] exportFCL_teus
+// [17] exportFCL_profit
+// [18] importFCL_shipments
+// [19] importFCL_ownSales
+// [20] importFCL_routedAgents
+// [21] importFCL_teus
+// [22] importFCL_profit
+// [23] exportLCL_shipments
+// [24] exportLCL_ownSales
+// [25] exportLCL_routedAgents
+// [26] exportLCL_cbms
+// [27] exportLCL_profit
+// [28] importLCL_shipments
+// [29] importLCL_ownSales
+// [30] importLCL_routedAgents
+// [31] importLCL_cbms
+// [32] importLCL_profit
+// [33] specialFiles
+// [34] specialProfit
+// [35] multimodalShipments
+// [36] multimodalProfit
+// [37] totalProfit
+// [38] staff
+// [39] exportsImportsSummary
+// [40] activeAgents
+// [41] newCustomers
+// [42] lostCustomers
+// [43] vendorIssues
+// [44] noOfQuotes
+// [45] newProducts
+// [46] noteworthyShipments
+// [47] paymentIssues
+// [48] staffIssues
+const TOTAL_FIELDS = 49;
+
+function emptyFields(): string[] {
+  return Array(TOTAL_FIELDS).fill("");
+}
+
+function p(val: string): number {
+  const n = parseFloat(val.replace(/[$,\s]/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+
+// ─── Entry Modal ──────────────────────────────────────────────────────────────
+
+type ToggleCategory = "gsa" | "fcl" | "lcl" | "special" | "multimodal";
+
+interface EntryModalProps {
+  buEntry: BUEntry;
+  onClose: () => void;
+  prefillMonth?: string;
+  prefillYear?: number;
+  newTab: string;
+}
+
+function EntryModal({ buEntry, onClose, prefillMonth, prefillYear, newTab }: EntryModalProps) {
+  const [editMonth, setEditMonth] = useState(prefillMonth ?? "April");
+  const [editYear, setEditYear]   = useState(prefillYear ?? new Date().getFullYear());
+  const [fields, setFields]       = useState<string[]>(emptyFields);
+  const [toggled, setToggled]     = useState<Set<ToggleCategory>>(new Set());
+  const [fetching, setFetching]   = useState(!!prefillMonth);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  // Pre-fill on mount if editing existing row
+  useMemo(() => {
+    if (!prefillMonth) return;
+    setFetching(true);
+    fetch(`/api/bu-entries?tab=${encodeURIComponent(newTab)}&month=${encodeURIComponent(prefillMonth)}&year=${prefillYear ?? new Date().getFullYear()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.found && data.fields.length > 0) {
+          const filled = emptyFields();
+          data.fields.forEach((v: string, i: number) => { if (i < TOTAL_FIELDS) filled[i] = v; });
+          setFields(filled);
+          // Auto-open categories that have data
+          const auto = new Set<ToggleCategory>();
+          if (p(filled[10]) || p(filled[11]) || p(filled[12])) auto.add("gsa");
+          if (p(filled[13]) || p(filled[18])) auto.add("fcl");
+          if (p(filled[23]) || p(filled[28])) auto.add("lcl");
+          if (p(filled[33]) || p(filled[34])) auto.add("special");
+          if (p(filled[35]) || p(filled[36])) auto.add("multimodal");
+          setToggled(auto);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setFetching(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const set = (idx: number) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFields((prev) => { const next = [...prev]; next[idx] = e.target.value; return next; });
+  };
+
+  const toggle = (cat: ToggleCategory) => {
+    setToggled((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
+      return next;
+    });
+  };
+
+  // ── Live KPIs ──────────────────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const f = fields.map(p);
+    const exportAF_shipments = f[0], exportAF_weight = f[3], exportAF_profit = f[4];
+    const importAF_shipments = f[5], importAF_weight = f[8], importAF_profit = f[9];
+    const gsa_shipments = f[10];
+    const exportFCL_shipments = f[13], exportFCL_profit = f[17];
+    const importFCL_shipments = f[18], importFCL_profit = f[22];
+    const exportLCL_shipments = f[23], exportLCL_profit = f[27];
+    const importLCL_shipments = f[28], importLCL_profit = f[32];
+    const specialFiles = f[33], specialProfit = f[34];
+    const multimodalShipments = f[35], multimodalProfit = f[36];
+    const staff = f[38];
+
+    const totalAFShipments = exportAF_shipments + importAF_shipments;
+    const totalAFWeight    = exportAF_weight + importAF_weight;
+    const totalAFProfit    = exportAF_profit + importAF_profit;
+    const totalSeaShipments = exportFCL_shipments + importFCL_shipments + exportLCL_shipments + importLCL_shipments;
+    const totalSeaProfit    = exportFCL_profit + importFCL_profit + exportLCL_profit + importLCL_profit;
+    const totalTransactions = totalAFShipments + gsa_shipments + totalSeaShipments + specialFiles + multimodalShipments;
+    const totalWeight       = totalAFWeight;
+
+    return {
+      totalWeight,
+      totalTransactions,
+      profitPerAF: totalAFShipments > 0 ? totalAFProfit / totalAFShipments : 0,
+      profitPerSea: totalSeaShipments > 0 ? totalSeaProfit / totalSeaShipments : 0,
+      profitPerAFkg: totalAFWeight > 0 ? totalAFProfit / totalAFWeight : 0,
+      profitPerSpecial: specialFiles > 0 ? specialProfit / specialFiles : 0,
+      profitPerMultimodal: multimodalShipments > 0 ? multimodalProfit / multimodalShipments : 0,
+      profitPerStaff: staff > 0 ? (totalAFProfit + totalSeaProfit + specialProfit + multimodalProfit) / staff : 0,
+    };
+  }, [fields]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/bu-entries", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tab: newTab, month: editMonth, year: editYear, fields }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.error || "Something went wrong."); return; }
+      setSubmitSuccess(true);
+      setTimeout(() => { onClose(); }, 2000);
+    } catch { setSubmitError("Network error. Please try again."); }
+    finally  { setSubmitting(false); }
+  };
+
+  // ── Styles ─────────────────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    background: "var(--surface2)", border: "1px solid var(--border)",
+    color: "var(--text)", borderRadius: "0.5rem",
+    padding: "0.45rem 0.75rem", width: "100%", fontSize: "0.875rem", outline: "none",
+  };
+  const textareaStyle: React.CSSProperties = {
+    ...inputStyle, resize: "vertical", minHeight: "60px", fontFamily: "inherit",
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block", fontSize: "0.72rem", fontWeight: 500,
+    color: "var(--muted)", marginBottom: "0.2rem",
+    textTransform: "uppercase", letterSpacing: "0.04em",
+  };
+  const selectStyle: React.CSSProperties = {
+    background: "var(--surface)", border: "1px solid var(--border)",
+    color: "var(--text)", borderRadius: "0.5rem",
+    padding: "0.375rem 0.625rem", fontSize: "0.875rem", outline: "none",
+  };
+
+  const sectionHeaderStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "0.5rem 0.75rem", borderRadius: "0.5rem", marginBottom: active ? "0.75rem" : 0,
+    background: "var(--surface2)", border: "1px solid var(--border)", cursor: "pointer",
+  });
+
+  const toggleBtnStyle = (active: boolean): React.CSSProperties => ({
+    width: "26px", height: "26px", borderRadius: "0.375rem",
+    background: active ? "var(--accent)" : "var(--surface)",
+    color: active ? "#fff" : "var(--accent)",
+    border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+    cursor: "pointer", fontWeight: 700, fontSize: "1rem",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
+  });
+
+  const alwaysHeaderStyle: React.CSSProperties = {
+    fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.06em", color: "var(--accent)",
+    borderBottom: "1px solid var(--border)", paddingBottom: "0.375rem", marginBottom: "0.75rem",
+  };
+
+  const subHeaderStyle: React.CSSProperties = {
+    fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase",
+    letterSpacing: "0.05em", color: "var(--muted)", marginBottom: "0.5rem",
+  };
+
+  const Field = ({ label, idx, type = "number" }: { label: string; idx: number; type?: string }) => (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      <input type={type} step="any" value={fields[idx]}
+        onChange={set(idx)} placeholder="0" style={inputStyle} />
+    </div>
+  );
+
+  const CommentField = ({ label, idx }: { label: string; idx: number }) => (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      <textarea value={fields[idx]} onChange={set(idx)} style={textareaStyle} />
+    </div>
+  );
+
+  // ── KPI Card (inline) ──────────────────────────────────────────────────────
+  const KPI = ({ label, value }: { label: string; value: string }) => (
+    <div style={{
+      padding: "0.5rem 0.75rem", borderRadius: "0.5rem",
+      background: "var(--surface)", border: "1px solid var(--border)",
+    }}>
+      <div style={{ fontSize: "0.65rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--muted)", marginBottom: "0.15rem" }}>{label}</div>
+      <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent)" }}>{value}</div>
+    </div>
+  );
+
+  // ── Toggle section wrapper ─────────────────────────────────────────────────
+  const ToggleSection = ({ cat, label, children }: { cat: ToggleCategory; label: string; children: React.ReactNode }) => {
+    const open = toggled.has(cat);
+    return (
+      <div>
+        <div style={sectionHeaderStyle(open)} onClick={() => toggle(cat)}>
+          <span style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: open ? "var(--text)" : "var(--muted)" }}>
+            {label}
+          </span>
+          <button type="button" style={toggleBtnStyle(open)}>
+            {open ? "−" : "+"}
+          </button>
+        </div>
+        {open && <div style={{ marginTop: "0.75rem" }}>{children}</div>}
+      </div>
+    );
+  };
+
+  if (submitSuccess) {
+    return (
+      <ModalShell buEntry={buEntry} onClose={onClose}>
+        <div style={{ padding: "3rem 1.5rem", textAlign: "center" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>✅</div>
+          <p style={{ fontWeight: 600, color: "var(--text)" }}>Saved!</p>
+          <p style={{ fontSize: "0.875rem", marginTop: "0.25rem", color: "var(--muted)" }}>Refresh to see changes.</p>
+        </div>
+      </ModalShell>
+    );
+  }
+
+  if (fetching) {
+    return (
+      <ModalShell buEntry={buEntry} onClose={onClose}>
+        <div style={{ padding: "3rem 1.5rem", textAlign: "center", color: "var(--muted)" }}>
+          <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>⏳</div>
+          Loading existing data…
+        </div>
+      </ModalShell>
+    );
+  }
+
+  return (
+    <ModalShell buEntry={buEntry} onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+        {/* Month / Year */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+          <div>
+            <label style={labelStyle}>Month</label>
+            <select value={editMonth} onChange={(e) => setEditMonth(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
+              {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Year</label>
+            <input type="number" value={editYear} onChange={(e) => setEditYear(Number(e.target.value))}
+              min={2020} max={2099} style={inputStyle} />
+          </div>
+        </div>
+
+        {/* ── Live KPIs ── */}
+        <div>
+          <div style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: "0.5rem" }}>Live KPIs</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.5rem" }}>
+            <KPI label="Total Chargeable Weight" value={kpis.totalWeight > 0 ? `${Math.round(kpis.totalWeight).toLocaleString()} kg` : "—"} />
+            <KPI label="Total Transactions" value={kpis.totalTransactions > 0 ? kpis.totalTransactions.toLocaleString() : "—"} />
+            <KPI label="Profit / AF Shipment" value={kpis.profitPerAF > 0 ? fmtUSD(kpis.profitPerAF) : "—"} />
+            <KPI label="Profit / Sea Shipment" value={kpis.profitPerSea > 0 ? fmtUSD(kpis.profitPerSea) : "—"} />
+            <KPI label="Profit / AF kg" value={kpis.profitPerAFkg > 0 ? `$${kpis.profitPerAFkg.toFixed(2)}` : "—"} />
+            <KPI label="Profit / Special File" value={kpis.profitPerSpecial > 0 ? fmtUSD(kpis.profitPerSpecial) : "—"} />
+            <KPI label="Profit / Multimodal" value={kpis.profitPerMultimodal > 0 ? fmtUSD(kpis.profitPerMultimodal) : "—"} />
+            <KPI label="Profit / Staff" value={kpis.profitPerStaff > 0 ? fmtUSD(kpis.profitPerStaff) : "—"} />
+          </div>
+        </div>
+
+        {/* ── AIRFREIGHT (always visible) ── */}
+        <div>
+          <div style={alwaysHeaderStyle}>Airfreight</div>
+
+          {/* Export */}
+          <div style={{ marginBottom: "1rem" }}>
+            <div style={subHeaderStyle}>Export Airfreight</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Total # of export shipments" idx={0} />
+              <Field label="Own Sales" idx={1} />
+              <Field label="Routed from agents" idx={2} />
+              <Field label="Total chargeable weight (kg)" idx={3} />
+              <Field label="Total file profit (USD)" idx={4} />
+            </div>
+          </div>
+
+          {/* Import */}
+          <div>
+            <div style={subHeaderStyle}>Import Airfreight</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Total # of import shipments" idx={5} />
+              <Field label="Own Sales" idx={6} />
+              <Field label="Routed from agents" idx={7} />
+              <Field label="Total chargeable weight (kg)" idx={8} />
+              <Field label="Total file profit (USD)" idx={9} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── GSA/CSA EXPORT (toggle) ── */}
+        <ToggleSection cat="gsa" label="GSA / CSA Export">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+            <Field label="Total # of GSA/CSA export shipments" idx={10} />
+            <Field label="Total chargeable weight (kg)" idx={11} />
+            <Field label="Total file profit (USD)" idx={12} />
+          </div>
+        </ToggleSection>
+
+        {/* ── OCEAN FCL (toggle) ── */}
+        <ToggleSection cat="fcl" label="Ocean Freight — FCL">
+          <div style={{ marginBottom: "1rem" }}>
+            <div style={subHeaderStyle}>Export FCL</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Total # of export FCL shipments" idx={13} />
+              <Field label="Own Sales" idx={14} />
+              <Field label="Routed from agents" idx={15} />
+              <Field label="Total TEUs" idx={16} />
+              <Field label="Total file profit (USD)" idx={17} />
+            </div>
+          </div>
+          <div>
+            <div style={subHeaderStyle}>Import FCL</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Total # of import FCL shipments" idx={18} />
+              <Field label="Own Sales" idx={19} />
+              <Field label="Routed from agents" idx={20} />
+              <Field label="Total TEUs" idx={21} />
+              <Field label="Total file profit (USD)" idx={22} />
+            </div>
+          </div>
+        </ToggleSection>
+
+        {/* ── OCEAN LCL (toggle) ── */}
+        <ToggleSection cat="lcl" label="Ocean Freight — LCL">
+          <div style={{ marginBottom: "1rem" }}>
+            <div style={subHeaderStyle}>Export LCL</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Total # of export LCL shipments" idx={23} />
+              <Field label="Own Sales" idx={24} />
+              <Field label="Routed from agents" idx={25} />
+              <Field label="Total CBMs" idx={26} />
+              <Field label="Total file profit (USD)" idx={27} />
+            </div>
+          </div>
+          <div>
+            <div style={subHeaderStyle}>Import LCL</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Total # of import LCL shipments" idx={28} />
+              <Field label="Own Sales" idx={29} />
+              <Field label="Routed from agents" idx={30} />
+              <Field label="Total CBMs" idx={31} />
+              <Field label="Total file profit (USD)" idx={32} />
+            </div>
+          </div>
+        </ToggleSection>
+
+        {/* ── SPECIAL SERVICES (toggle) ── */}
+        <ToggleSection cat="special" label="Special Services">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+            <Field label="Total of Special Services Files" idx={33} />
+            <Field label="Total file profit (USD)" idx={34} />
+          </div>
+        </ToggleSection>
+
+        {/* ── MULTIMODAL / ROAD FREIGHT (toggle) ── */}
+        <ToggleSection cat="multimodal" label="Multimodal / Road Freight">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+            <Field label="Total shipments" idx={35} />
+            <Field label="Total file profit (USD)" idx={36} />
+          </div>
+        </ToggleSection>
+
+        {/* ── GENERAL INFO ── */}
+        <div>
+          <div style={alwaysHeaderStyle}>General</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem", marginBottom: "1.25rem" }}>
+            <Field label="Total file profit (USD) — must match sum above" idx={37} />
+            <Field label="Number of staff incl. managers" idx={38} />
+          </div>
+
+          {/* Comments */}
+          <div style={{ ...subHeaderStyle, marginBottom: "0.75rem" }}>Comments</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <CommentField label="Exports / Imports summary" idx={39} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Active agents / offices" idx={40} type="text" />
+              <Field label="New customers" idx={41} type="text" />
+              <Field label="Lost customers" idx={42} type="text" />
+              <Field label="Vendor issues" idx={43} type="text" />
+              <Field label="No of quotes" idx={44} />
+              <Field label="New products" idx={45} type="text" />
+            </div>
+            <CommentField label="Noteworthy shipments" idx={46} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.625rem" }}>
+              <Field label="Payment issues over 60 days" idx={47} type="text" />
+              <Field label="Staff issues" idx={48} type="text" />
+            </div>
+          </div>
+        </div>
+
+        {submitError && (
+          <p style={{ fontSize: "0.875rem", color: "#dc2626" }}>{submitError}</p>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <button type="submit" disabled={submitting} style={{
+            background: submitting ? "var(--muted)" : "var(--accent)", color: "#fff",
+            border: "none", borderRadius: "0.5rem", padding: "0.625rem",
+            fontWeight: 600, fontSize: "0.875rem",
+            cursor: submitting ? "not-allowed" : "pointer",
+          }}>
+            {submitting ? "Saving…" : "Save Entry"}
+          </button>
+          <button type="button" onClick={onClose} style={{
+            background: "none", border: "none", color: "var(--muted)",
+            cursor: "pointer", fontSize: "0.875rem", padding: "0.375rem",
+          }}>Cancel</button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ── Modal shell (overlay + card) ──────────────────────────────────────────────
+
+function ModalShell({ buEntry, onClose, children }: { buEntry: BUEntry; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, display: "flex", alignItems: "center",
+        justifyContent: "center", zIndex: 60, padding: "1rem",
+        background: "rgba(0,0,0,0.5)",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        width: "100%", maxWidth: "580px", borderRadius: "0.75rem",
+        boxShadow: "0 25px 50px rgba(0,0,0,0.3)",
+        background: "var(--surface)", border: "1px solid var(--border)",
+        maxHeight: "92vh", overflowY: "auto",
+        display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "1rem 1.5rem", borderBottom: "1px solid var(--border)",
+          position: "sticky", top: 0, background: "var(--surface)", zIndex: 1,
+        }}>
+          <div>
+            <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--text)", margin: 0 }}>Add / Edit Entry</h2>
+            <p style={{ fontSize: "0.75rem", marginTop: "0.125rem", color: "var(--muted)" }}>{buEntry.label}</p>
+          </div>
+          <button onClick={onClose} style={{
+            background: "none", border: "none", color: "var(--muted)",
+            cursor: "pointer", fontSize: "1.25rem", lineHeight: 1,
+          }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── BU Tab lookup for newTab ─────────────────────────────────────────────────
+
+const BU_NEW_TABS: Record<string, string> = {
+  "CONSOLIDATED OPS": "CONSOLIDATED OPS_new",
+  "AASA":             "AASA_new",
+  "AAINT ":           "AAINT_new",
+  "AAEA":             "AAEA_new",
+  "AAWN":             "AAWN_new",
+  "AACN ":            "AACN_new",
+  "AAMA ":            "AAMA_new",
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function BUDashboard({ buSheets }: Props) {
   const [selected, setSelected] = useState(0);
+  const [modal, setModal] = useState<{ buEntry: BUEntry; prefillMonth?: string; prefillYear?: number } | null>(null);
 
   const bu = buSheets[selected];
   const allRecords = bu.records;
@@ -147,7 +604,6 @@ export default function BUDashboard({ buSheets }: Props) {
   const minYear = availableYears[0] ?? new Date().getFullYear();
   const maxYear = availableYears[availableYears.length - 1] ?? new Date().getFullYear();
 
-  // Default from = earliest record, to = latest record
   const firstRecord = allRecords[0];
   const lastRecord  = allRecords[allRecords.length - 1];
 
@@ -198,83 +654,6 @@ export default function BUDashboard({ buSheets }: Props) {
     shipments: r.airfreightShipments,
   }));
 
-  // ── Edit modal state ─────────────────────────────────────────────────────
-  const [showModal, setShowModal]   = useState(false);
-  const [modalBU,   setModalBU]     = useState<BUEntry | null>(null);
-  const [editMonth, setEditMonth]   = useState("April");
-  const [editYear,  setEditYear]    = useState(new Date().getFullYear());
-  const [fieldValues, setFieldValues] = useState<string[]>([]);
-  const [submitting,  setSubmitting]  = useState(false);
-  const [fetching,    setFetching]    = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  const openModal = async (buEntry: BUEntry, prefillMonth?: string, prefillYear?: number) => {
-    const schema = BU_SCHEMA[buEntry.name];
-    if (!schema) return;
-    const m = prefillMonth ?? "April";
-    const y = prefillYear ?? new Date().getFullYear();
-    setModalBU(buEntry);
-    setEditMonth(m);
-    setEditYear(y);
-    setFieldValues(schema.fields.map(() => ""));
-    setSubmitError("");
-    setSubmitSuccess(false);
-    setShowModal(true);
-    if (prefillMonth) {
-      setFetching(true);
-      try {
-        const res = await fetch(
-          `/api/bu-entries?tab=${encodeURIComponent(schema.newTab)}&month=${encodeURIComponent(m)}&year=${y}`
-        );
-        const data = await res.json();
-        if (data.found && data.fields.length > 0) {
-          setFieldValues(schema.fields.map((_, i) => data.fields[i] ?? ""));
-        }
-      } catch { /* ignore */ } finally { setFetching(false); }
-    }
-  };
-
-  const closeModal = () => {
-    if (submitting) return;
-    setShowModal(false);
-    setSubmitError("");
-    setSubmitSuccess(false);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!modalBU) return;
-    const schema = BU_SCHEMA[modalBU.name];
-    if (!schema) return;
-    setSubmitting(true);
-    setSubmitError("");
-    try {
-      const res = await fetch("/api/bu-entries", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tab: schema.newTab, month: editMonth, year: editYear, fields: fieldValues }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setSubmitError(data.error || "Something went wrong."); return; }
-      setSubmitSuccess(true);
-      setTimeout(() => { setShowModal(false); setSubmitSuccess(false); }, 2000);
-    } catch { setSubmitError("Network error. Please try again."); }
-    finally  { setSubmitting(false); }
-  };
-
-  const inputStyle: React.CSSProperties = {
-    background: "var(--surface2)", border: "1px solid var(--border)",
-    color: "var(--text)", borderRadius: "0.5rem",
-    padding: "0.45rem 0.75rem", width: "100%", fontSize: "0.875rem", outline: "none",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block", fontSize: "0.72rem", fontWeight: 500,
-    color: "var(--muted)", marginBottom: "0.2rem",
-    textTransform: "uppercase", letterSpacing: "0.04em",
-  };
-  const schema = modalBU ? BU_SCHEMA[modalBU.name] : null;
-
   const selectStyle: React.CSSProperties = {
     background: "var(--surface)", border: "1px solid var(--border)",
     color: "var(--text)", borderRadius: "0.5rem",
@@ -304,9 +683,9 @@ export default function BUDashboard({ buSheets }: Props) {
             >
               {b.label}
             </button>
-            {BU_SCHEMA[b.name] && (
+            {BU_NEW_TABS[b.name] && (
               <button
-                onClick={() => openModal(b)}
+                onClick={() => setModal({ buEntry: b })}
                 title={`Add entry for ${b.label}`}
                 style={{
                   width: "28px", height: "36px", background: "var(--surface2)",
@@ -324,7 +703,6 @@ export default function BUDashboard({ buSheets }: Props) {
         style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
         <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted)" }}>Period</span>
 
-        {/* From */}
         <div className="flex items-center gap-1.5">
           <select value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} style={selectStyle}>
             {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -336,7 +714,6 @@ export default function BUDashboard({ buSheets }: Props) {
 
         <span style={{ color: "var(--muted)", fontSize: "0.875rem" }}>→</span>
 
-        {/* To */}
         <div className="flex items-center gap-1.5">
           <select value={toMonth} onChange={(e) => setToMonth(e.target.value)} style={selectStyle}>
             {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -478,23 +855,23 @@ export default function BUDashboard({ buSheets }: Props) {
             </thead>
             <tbody>
               {filtered.map((r, i) => {
-                const hasSchema = !!BU_SCHEMA[bu.name];
-                const tabMonth  = MONTH_NAME_MAP[r.month] ?? r.month;
+                const hasTab = !!BU_NEW_TABS[bu.name];
+                const tabMonth = MONTH_NAME_MAP[r.month] ?? r.month;
                 return (
                   <tr
                     key={`${r.month}-${r.year}`}
-                    onClick={() => hasSchema && openModal(bu, tabMonth, r.year)}
+                    onClick={() => hasTab && setModal({ buEntry: bu, prefillMonth: tabMonth, prefillYear: r.year })}
                     style={{
                       borderTop: "1px solid var(--border)",
                       background: i % 2 === 0 ? "var(--surface)" : "transparent",
-                      cursor: hasSchema ? "pointer" : "default",
+                      cursor: hasTab ? "pointer" : "default",
                     }}
-                    className={hasSchema ? "hover:opacity-80 transition-opacity" : ""}
+                    className={hasTab ? "hover:opacity-80 transition-opacity" : ""}
                   >
                     <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text)" }}>
                       <span className="flex items-center gap-1.5">
                         {r.month} {r.year}
-                        {hasSchema && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>✎ edit</span>}
+                        {hasTab && <span style={{ fontSize: "0.65rem", color: "var(--accent)", opacity: 0.7 }}>✎ edit</span>}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-right" style={{ color: "var(--muted)" }}>
@@ -532,111 +909,15 @@ export default function BUDashboard({ buSheets }: Props) {
         </div>
       </div>
 
-      {/* Edit Modal */}
-      {showModal && modalBU && schema && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-[60] p-4"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
-        >
-          <div className="w-full max-w-lg rounded-xl shadow-2xl overflow-hidden"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-              <div>
-                <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>Edit Entry</h2>
-                <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{modalBU.label}</p>
-              </div>
-              <button onClick={closeModal} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "1.25rem" }}>✕</button>
-            </div>
-
-            {submitSuccess ? (
-              <div className="px-6 py-12 text-center">
-                <div className="text-3xl mb-3">✅</div>
-                <p className="font-semibold" style={{ color: "var(--text)" }}>Saved!</p>
-                <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Refresh to see changes.</p>
-              </div>
-            ) : fetching ? (
-              <div className="px-6 py-12 text-center" style={{ color: "var(--muted)" }}>
-                <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>⏳</div>
-                Loading existing data…
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label style={labelStyle}>Month</label>
-                    <select value={editMonth} onChange={(e) => setEditMonth(e.target.value)} style={inputStyle}>
-                      {FY_MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Year</label>
-                    <input type="number" value={editYear} onChange={(e) => setEditYear(Number(e.target.value))}
-                      min={2020} max={2099} style={inputStyle} />
-                  </div>
-                </div>
-
-                {(() => {
-                  const elements: React.ReactNode[] = [];
-                  let currentGroup = "";
-                  const groupFields: { def: FieldDef; idx: number }[] = [];
-                  const flushGroup = () => {
-                    if (!groupFields.length) return;
-                    const cols = groupFields.length === 1 ? "grid-cols-1" : groupFields.length === 2 ? "grid-cols-2" : "grid-cols-3";
-                    elements.push(
-                      <div key={currentGroup}>
-                        {currentGroup && (
-                          <div className="text-xs font-semibold uppercase tracking-wider mb-2"
-                            style={{ color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "4px" }}>
-                            {currentGroup}
-                          </div>
-                        )}
-                        <div className={`grid ${cols} gap-3`}>
-                          {groupFields.map(({ def, idx }) => (
-                            <div key={idx}>
-                              <label style={labelStyle}>{def.label}</label>
-                              <input type="number" step="any" value={fieldValues[idx]}
-                                onChange={(e) => {
-                                  const vals = [...fieldValues];
-                                  vals[idx] = e.target.value;
-                                  setFieldValues(vals);
-                                }}
-                                placeholder="0" style={inputStyle} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                    groupFields.length = 0;
-                  };
-                  schema.fields.forEach((def, idx) => {
-                    if (def.group && def.group !== currentGroup) { flushGroup(); currentGroup = def.group; }
-                    groupFields.push({ def, idx });
-                  });
-                  flushGroup();
-                  return elements;
-                })()}
-
-                {submitError && <p className="text-sm" style={{ color: "#dc2626" }}>{submitError}</p>}
-
-                <div className="flex flex-col gap-2 pt-1">
-                  <button type="submit" disabled={submitting} style={{
-                    background: submitting ? "var(--muted)" : "var(--accent)", color: "#fff",
-                    border: "none", borderRadius: "0.5rem", padding: "0.625rem",
-                    fontWeight: 600, fontSize: "0.875rem",
-                    cursor: submitting ? "not-allowed" : "pointer", width: "100%",
-                  }}>
-                    {submitting ? "Saving…" : "Update Entry"}
-                  </button>
-                  <button type="button" onClick={closeModal} style={{
-                    background: "none", border: "none", color: "var(--muted)",
-                    cursor: "pointer", fontSize: "0.875rem", padding: "0.375rem",
-                  }}>Cancel</button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
+      {/* Entry Modal */}
+      {modal && (
+        <EntryModal
+          buEntry={modal.buEntry}
+          newTab={BU_NEW_TABS[modal.buEntry.name] ?? ""}
+          prefillMonth={modal.prefillMonth}
+          prefillYear={modal.prefillYear}
+          onClose={() => setModal(null)}
+        />
       )}
     </div>
   );
